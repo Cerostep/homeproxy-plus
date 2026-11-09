@@ -1,0 +1,30 @@
+name: Test HomeProxy-Plus
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'Makefile'
+      - 'root/**'
+      - 'htdocs/**'
+      - 'tests/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'root/**'
+      - 'htdocs/**'
+      - 'tests/**'
+      - '.github/workflows/test.yml'
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate package identity and scripts
+        run: sh tests/package_identity.sh
+      - name: Test existing local route detection
+        run: sh tests/service_network_routes.sh

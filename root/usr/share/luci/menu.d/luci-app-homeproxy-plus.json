@@ -1,0 +1,45 @@
+{
+	"admin/services/homeproxy_plus": {
+		"title": "HomeProxy-Plus",
+		"order": 10,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-homeproxy-plus" ],
+			"uci": { "homeproxy_plus": true }
+		}
+	},
+	"admin/services/homeproxy_plus/client": {
+		"title": "Client Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "homeproxy_plus/client"
+		}
+	},
+	"admin/services/homeproxy_plus/node": {
+		"title": "Node Settings",
+		"order": 15,
+		"action": {
+			"type": "view",
+			"path": "homeproxy_plus/node"
+		}
+	},
+	"admin/services/homeproxy_plus/server": {
+		"title": "Server Settings",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "homeproxy_plus/server"
+		}
+	},
+	"admin/services/homeproxy_plus/status": {
+		"title": "Service Status",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "homeproxy_plus/status"
+		}
+	}
+}

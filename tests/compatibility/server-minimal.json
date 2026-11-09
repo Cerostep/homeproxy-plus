@@ -1,0 +1,28 @@
+{
+	"log": {
+		"disabled": true
+	},
+	"inbounds": [
+		{
+			"type": "socks",
+			"tag": "compat-server-in",
+			"listen": "127.0.0.1",
+			"listen_port": 2081,
+			"users": [
+				{
+					"username": "compatibility-test",
+					"password": "not-a-real-credential"
+				}
+			]
+		}
+	],
+	"outbounds": [
+		{
+			"type": "direct",
+			"tag": "direct"
+		}
+	],
+	"route": {
+		"final": "direct"
+	}
+}

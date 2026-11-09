@@ -1,0 +1,375 @@
+#!/usr/bin/ucode
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ *
+ * Copyright (C) 2026 Cerostep
+ * Copyright (C) 2023-2024 ImmortalWrt.org
+ */
+
+'use strict';
+
+import { access, error, lstat, popen, readfile, writefile } from 'fs';
+import { cursor } from 'uci';
+import { getSingBoxFeatures, validation } from '/etc/homeproxy_plus/scripts/homeproxy_plus.uc';
+
+/* Kanged from ucode/luci */
+function shellquote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+}
+
+function hasKernelModule(kmod) {
+	return (system(sprintf('[ -e "/lib/modules/$(uname -r)"/%s ]', shellquote(kmod))) === 0);
+}
+
+const HP_DIR = '/etc/homeproxy_plus';
+const RUN_DIR = '/var/run/homeproxy_plus';
+
+const methods = {
+	acllist_read: {
+		args: { type: 'type' },
+		call: function(req) {
+			if (index(['direct_list', 'proxy_list'], req.args?.type) === -1)
+				return { content: null, error: 'illegal type' };
+
+			const filecontent = readfile(`${HP_DIR}/resources/${req.args?.type}.txt`);
+			return { content: filecontent };
+		}
+	},
+	acllist_write: {
+		args: { type: 'type', content: 'content' },
+		call: function(req) {
+			if (index(['direct_list', 'proxy_list'], req.args?.type) === -1)
+				return { result: false, error: 'illegal type' };
+
+			const file = `${HP_DIR}/resources/${req.args?.type}.txt`;
+			let content = req.args?.content;
+
+			/* Sanitize content */
+			if (content) {
+				content = trim(content);
+				content = replace(content, /\r\n?/g, '\n');
+				if (!match(content, /\n$/))
+					content += '\n';
+			}
+
+			system(`mkdir -p ${HP_DIR}/resources`);
+			writefile(file, content);
+
+			return { result: true };
+		}
+	},
+
+	certificate_write: {
+		args: { filename: 'filename' },
+		call: function(req) {
+			const writeCertificate = (filename, priv) => {
+				const tmpcert = '/tmp/homeproxy_plus_certificate.tmp';
+				const filestat = lstat(tmpcert);
+
+				if (!filestat || filestat.type !== 'file' || filestat.size <= 0) {
+					system(`rm -f ${tmpcert}`);
+					return { result: false, error: 'empty certificate file' };
+				}
+
+				let filecontent = readfile(tmpcert);
+				if (is_binary(filecontent)) {
+					system(`rm -f ${tmpcert}`);
+					return { result: false, error: 'illegal file type: binary' };
+				}
+
+				/* Kanged from luci-proto-openconnect */
+				const beg = priv ? /^-----BEGIN (RSA|EC) PRIVATE KEY-----$/ : /^-----BEGIN CERTIFICATE-----$/,
+				      end = priv ? /^-----END (RSA|EC) PRIVATE KEY-----$/ : /^-----END CERTIFICATE-----$/,
+				      lines = split(trim(filecontent), /[\r\n]/);
+				let start = false, i;
+
+				for (i = 0; i < length(lines); i++) {
+					if (match(lines[i], beg))
+						start = true;
+					else if (start && !b64dec(lines[i]) && length(lines[i]) !== 64)
+						break;
+				}
+
+				if (!start || i < length(lines) - 1 || !match(lines[i], end)) {
+					system(`rm -f ${tmpcert}`);
+					return { result: false, error: 'this does not look like a correct PEM file' };
+				}
+
+				/* Sanitize certificate */
+				filecontent = trim(filecontent);
+				filecontent = replace(filecontent, /\r\n?/g, '\n');
+				if (!match(filecontent, /\n$/))
+					filecontent += '\n';
+
+				system(`mkdir -p ${HP_DIR}/certs`);
+				writefile(`${HP_DIR}/certs/${filename}.pem`, filecontent);
+				system(`rm -f ${tmpcert}`);
+
+				return { result: true };
+			};
+
+			const filename = req.args?.filename;
+			switch (filename) {
+			case 'client_ca':
+			case 'server_publickey':
+				return writeCertificate(filename, false);
+				break;
+			case 'server_privatekey':
+				return writeCertificate(filename, true);
+				break;
+			default:
+				return { result: false, error: 'illegal cerificate filename' };
+				break;
+			}
+		}
+	},
+
+	connection_check: {
+		args: { site: 'site' },
+		call: function(req) {
+			let url;
+			switch(req.args?.site) {
+			case 'baidu':
+				url = 'https://www.baidu.com';
+				break;
+			case 'google':
+				url = 'https://www.google.com';
+				break;
+			default:
+				return { result: false, error: 'illegal site' };
+				break;
+			}
+
+			return { result: (system(`/usr/bin/curl --head --location --silent --output /dev/null --connect-timeout 2 --max-time 3 --fail ${url} 2>"/dev/null"`, 3500) === 0) };
+		}
+	},
+
+	server_listener_status: {
+		call: function() {
+			const fd = popen('/bin/netstat -ln');
+			if (!fd)
+				return { error: 'unable to inspect local listening sockets' };
+
+			let listeners = [];
+			let hasHeader = false;
+
+			for (let line = fd.read('line'); length(line); line = fd.read('line')) {
+				if (match(line, /^Active Internet connections/))
+					hasHeader = true;
+
+				let fields = split(trim(line), /\s+/);
+				if (length(fields) < 5 || index(['tcp', 'tcp6', 'udp', 'udp6'], fields[0]) === -1)
+					continue;
+
+				let endpoint = match(fields[3], /^(.*):([0-9]+)$/);
+				if (!endpoint)
+					continue;
+
+				let transport = substr(fields[0], 0, 3);
+				if (transport === 'tcp' && (length(fields) < 6 || fields[5] !== 'LISTEN'))
+					continue;
+
+				push(listeners, {
+					transport,
+					address: endpoint[1],
+					port: endpoint[2]
+				});
+			}
+
+			fd.close();
+			if (!hasHeader)
+				return { error: 'unable to read local listening sockets' };
+
+			const uci = cursor();
+			uci.load('homeproxy_plus');
+			let servers = {};
+
+			uci.foreach('homeproxy_plus', 'server', (section) => {
+				const id = section['.name'];
+				if (section.enabled !== '1') {
+					servers[id] = { active: false, enabled: false };
+					return;
+				}
+
+				const address = section.address || '::';
+				if (!validation('port', section.port) ||
+				    (!validation('ip4addr', address) && !validation('ip6addr', address))) {
+					servers[id] = { active: false, enabled: true, error: 'invalid listen address or port' };
+					return;
+				}
+
+				let transports;
+				if (section.network === 'tcp' || section.network === 'udp')
+					transports = [section.network];
+				else if (index(['hysteria', 'hysteria2', 'tuic'], section.type) !== -1)
+					transports = ['udp'];
+				else if (section.type === 'shadowsocks')
+					transports = ['tcp', 'udp'];
+				else
+					transports = ['tcp'];
+
+				let active = true;
+				for (let i = 0; i < length(transports); i++) {
+					let listening = false;
+					for (let j = 0; j < length(listeners); j++) {
+						const listener = listeners[j];
+						if (listener.transport === transports[i] &&
+						    listener.port === section.port &&
+						    listener.address === address) {
+							listening = true;
+							break;
+						}
+					}
+
+					if (!listening) {
+						active = false;
+						break;
+					}
+				}
+
+				servers[id] = { active, enabled: true };
+			});
+
+			return { servers };
+		}
+	},
+
+	node_tcping: {
+		args: { id: 'id' },
+		call: function(req) {
+			const id = req.args?.id;
+			if (type(id) !== 'string' || !match(id, /^[A-Za-z0-9_-]+$/))
+				return { result: false, error: 'invalid node ID' };
+
+			const uci = cursor();
+			uci.load('homeproxy_plus');
+			let node;
+			uci.foreach('homeproxy_plus', 'node', (section) => {
+				if (section['.name'] === id)
+					node = section;
+			});
+
+			if (!node || !validation('host', node.address) || !validation('port', node.port))
+				return { result: false, error: 'node address or port is invalid' };
+
+			const start = match(readfile('/proc/uptime') || '', /^([0-9]+[.][0-9]+)/);
+			if (!start)
+				return { result: false, error: 'unable to read monotonic clock' };
+
+			const status = system(`/usr/bin/nc ${shellquote(node.address)} ${shellquote(node.port)} </dev/null >/dev/null 2>&1`, 3000);
+			const end = match(readfile('/proc/uptime') || '', /^([0-9]+[.][0-9]+)/);
+			if (!end)
+				return { result: false, error: 'unable to read monotonic clock' };
+			if (status !== 0)
+				return { result: false, error: (status === -9) ? 'timeout' : 'TCP connection failed' };
+
+			return {
+				result: true,
+				latency_ms: max(0, int((+end[1] - +start[1]) * 1000 + 0.5))
+			};
+		}
+	},
+
+	log_clean: {
+		args: { type: 'type' },
+		call: function(req) {
+			if (!(req.args?.type in ['homeproxy_plus', 'sing-box-c', 'sing-box-s']))
+				return { result: false, error: 'illegal type' };
+
+			const filestat = lstat(`${RUN_DIR}/${req.args?.type}.log`);
+			if (filestat)
+				writefile(`${RUN_DIR}/${req.args?.type}.log`, '');
+			return { result: true };
+		}
+	},
+
+	singbox_generator: {
+		args: { type: 'type', params: 'params' },
+		call: function(req) {
+			if (!(req.args?.type in ['ech-keypair', 'uuid', 'reality-keypair', 'vapid-keypair', 'wg-keypair']))
+				return { result: false, error: 'illegal type' };
+
+			const type = req.args?.type;
+			let result = {};
+
+			const fd = popen(`/usr/bin/sing-box generate ${type} ${shellquote(req.args?.params || '')}`);
+			if (fd) {
+				let ech_cfg_set = false;
+				let ech_key_set = false;
+
+				for (let line = fd.read('line'); length(line); line = fd.read('line')) {
+					if (type === 'uuid')
+						result.uuid = trim(line);
+					else if (type in ['reality-keypair', 'vapid-keypair', 'wg-keypair']) {
+						let priv = match(trim(line), /PrivateKey: (.*)/);
+						if (priv)
+							result.private_key = priv[1];
+						let pub = match(trim(line), /PublicKey: (.*)/);
+						if (pub)
+							result.public_key = pub[1];
+					} else if (type in ['ech-keypair']) {
+						if (trim(line) === '-----BEGIN ECH CONFIGS-----')
+							ech_cfg_set = true;
+						else if (trim(line) === '-----BEGIN ECH KEYS-----')
+							ech_key_set = true;
+
+						if (ech_cfg_set)
+							result.ech_cfg = result.ech_cfg ? result.ech_cfg + '\n' + trim(line) : trim(line) ;
+						if (ech_key_set)
+							result.ech_key = result.ech_key ? result.ech_key + '\n' + trim(line) : trim(line) ;
+
+						if (trim(line) === '-----END ECH CONFIGS-----')
+							ech_cfg_set = false;
+						else if (trim(line) === '-----END ECH KEYS-----')
+							ech_key_set = false;
+					}
+				}
+
+				fd.close();
+			}
+
+			return { result };
+		}
+	},
+
+	singbox_get_features: {
+		call: function() {
+			try {
+				let features = getSingBoxFeatures();
+
+				features.hp_has_ip_full = access('/usr/libexec/ip-full');
+				features.hp_has_tcp_brutal = hasKernelModule('brutal.ko');
+				features.hp_has_tproxy = hasKernelModule('nft_tproxy.ko') || access('/etc/modules.d/nft-tproxy');
+				features.hp_has_tun = hasKernelModule('tun.ko') || access('/etc/modules.d/30-tun');
+
+				return features;
+			} catch (e) {
+				return {
+					error: sprintf('singbox_get_features failed (%s): %s',
+						e.type || 'unknown error', e.message || 'no error message')
+				};
+			}
+		}
+	},
+
+	resources_get_version: {
+		args: { type: 'type' },
+		call: function(req) {
+			const version = trim(readfile(`${HP_DIR}/resources/${req.args?.type}.ver`));
+			return { version: version, error: error() };
+		}
+	},
+	resources_update: {
+		args: { type: 'type' },
+		call: function(req) {
+			if (req.args?.type) {
+				const type = shellquote(req.args?.type);
+				const exit_code = system(`${HP_DIR}/scripts/update_resources.sh ${type}`);
+				return { status: exit_code };
+			} else
+				return { status: 255, error: 'illegal type' };
+		}
+	}
+};
+
+return { 'luci.homeproxy_plus': methods };

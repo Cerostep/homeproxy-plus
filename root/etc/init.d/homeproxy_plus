@@ -1,0 +1,415 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Copyright (C) 2026 Cerostep
+# Copyright (C) 2022-2023 ImmortalWrt.org
+
+USE_PROCD=1
+
+START=99
+STOP=10
+
+CONF="homeproxy_plus"
+PROG="/usr/bin/sing-box"
+
+HP_DIR="/etc/homeproxy_plus"
+RUN_DIR="/var/run/homeproxy_plus"
+LOG_PATH="$RUN_DIR/homeproxy_plus.log"
+
+# we don't know which is the default server, just take the first one
+DNSMASQ_UCI_CONFIG="$(uci -q show "dhcp.@dnsmasq[0]" | awk 'NR==1 {split($0, conf, /[.=]/); print conf[2]}')"
+if [ -f "/tmp/etc/dnsmasq.conf.$DNSMASQ_UCI_CONFIG" ]; then
+	DNSMASQ_DIR="$(awk -F '=' '/^conf-dir=/ {print $2}' "/tmp/etc/dnsmasq.conf.$DNSMASQ_UCI_CONFIG")/dnsmasq-homeproxy_plus.d"
+else
+	DNSMASQ_DIR="/tmp/dnsmasq.d/dnsmasq-homeproxy_plus.d"
+fi
+
+log() {
+	echo -e "$(date "+%Y-%m-%d %H:%M:%S") [DAEMON] $*" >> "$LOG_PATH"
+}
+
+_mark_enabled_server() {
+	local enabled
+	config_get_bool enabled "$1" enabled 0
+	if [ "$enabled" = "1" ]; then
+		HP_SERVER_ENABLED=1
+	fi
+	return 0
+}
+
+get_enabled_server_state() {
+	HP_SERVER_ENABLED=0
+	config_foreach _mark_enabled_server server
+}
+
+. "$HP_DIR/scripts/service_network.sh"
+. "$HP_DIR/scripts/firewall_lifecycle.sh"
+
+prepare_config() {
+	local role="$1" script="$2" staged="$3"
+
+	rm -f "$staged"
+	if ! ucode -L "$HP_DIR/scripts" -S "$HP_DIR/scripts/$script" 2>>"$LOG_PATH"; then
+		rm -f "$staged"
+		log "Error: failed to generate $role configuration."
+		return 1
+	fi
+
+	if [ ! -s "$staged" ]; then
+		rm -f "$staged"
+		log "Error: generated $role configuration is empty."
+		return 1
+	fi
+
+}
+
+install_generated_configs() {
+	local client_enabled="$1" server_enabled="$2"
+	local client_config="$RUN_DIR/sing-box-c.json"
+	local server_config="$RUN_DIR/sing-box-s.json"
+	local client_staged="$client_config.new"
+	local server_staged="$server_config.new"
+	local client_backup="$RUN_DIR/.sing-box-c.json.previous"
+	local server_backup="$RUN_DIR/.sing-box-s.json.previous"
+	local had_client=0 had_server=0
+
+	rm -f "$client_backup" "$server_backup"
+	if [ "$client_enabled" = "1" ] && [ -e "$client_config" ]; then
+		if ! cp -p "$client_config" "$client_backup"; then
+			log "Error: failed to preserve the current client configuration."
+			return 1
+		fi
+		had_client=1
+	fi
+	if [ "$server_enabled" = "1" ] && [ -e "$server_config" ]; then
+		if ! cp -p "$server_config" "$server_backup"; then
+			rm -f "$client_backup"
+			log "Error: failed to preserve the current server configuration."
+			return 1
+		fi
+		had_server=1
+	fi
+
+	if [ "$client_enabled" = "1" ] && ! mv -f "$client_staged" "$client_config"; then
+		log "Error: failed to install client configuration."
+		rm -f "$client_config" "$client_staged"
+		if [ "$had_client" = "1" ] && ! mv -f "$client_backup" "$client_config"; then
+			log "Error: failed to restore the previous client configuration."
+		fi
+		if [ "$had_server" = "1" ] && ! mv -f "$server_backup" "$server_config"; then
+			log "Error: failed to restore the previous server configuration."
+		fi
+		rm -f "$client_backup" "$server_backup"
+		return 1
+	fi
+
+	if [ "$server_enabled" = "1" ] && ! mv -f "$server_staged" "$server_config"; then
+		log "Error: failed to install server configuration."
+		if [ "$client_enabled" = "1" ]; then
+			rm -f "$client_config"
+			if [ "$had_client" = "1" ] && ! mv -f "$client_backup" "$client_config"; then
+				log "Error: failed to restore the previous client configuration."
+			fi
+		fi
+		rm -f "$server_config" "$server_staged"
+		if [ "$had_server" = "1" ] && ! mv -f "$server_backup" "$server_config"; then
+			log "Error: failed to restore the previous server configuration."
+		fi
+		rm -f "$client_backup" "$server_backup"
+		return 1
+	fi
+
+	rm -f "$client_backup" "$server_backup"
+}
+
+start_service() {
+	config_load "$CONF"
+
+	local routing_mode proxy_mode
+	config_get routing_mode "config" "routing_mode" "bypass_mainland_china"
+	config_get proxy_mode "config" "proxy_mode" "redirect_tproxy"
+
+	local outbound_node
+	if [ "$routing_mode" != "custom" ]; then
+		config_get outbound_node "config" "main_node" "nil"
+	else
+		config_get outbound_node "routing" "default_outbound" "nil"
+	fi
+
+	local server_enabled
+	get_enabled_server_state
+	server_enabled="$HP_SERVER_ENABLED"
+
+	if [ "$outbound_node" = "nil" ] && [ "$server_enabled" = "0" ]; then
+		return 1
+	fi
+
+	mkdir -p "$RUN_DIR"
+
+	local client_enabled=0
+	[ "$outbound_node" = "nil" ] || client_enabled=1
+
+	if [ "${HP_CONFIGS_PREPARED:-0}" != "1" ]; then
+		if [ "$client_enabled" = "1" ] &&
+			! prepare_config "client" "generate_client.uc" "$RUN_DIR/sing-box-c.json.new"; then
+			return 1
+		fi
+		if [ "$server_enabled" = "1" ] &&
+			! prepare_config "server" "generate_server.uc" "$RUN_DIR/sing-box-s.json.new"; then
+			rm -f "$RUN_DIR/sing-box-c.json.new"
+			return 1
+		fi
+	fi
+
+	if ! install_generated_configs "$client_enabled" "$server_enabled"; then
+		rm -f "$RUN_DIR/sing-box-c.json.new" "$RUN_DIR/sing-box-s.json.new"
+		return 1
+	fi
+
+	if [ "$outbound_node" != "nil" ]; then
+		# Auto update
+		local auto_update auto_update_time
+		config_get_bool auto_update "subscription" "auto_update" "0"
+		if [ "$auto_update" = "1" ]; then
+			config_get auto_update_time "subscription" "auto_update_time" "2"
+			sed -i "/#${CONF}_autosetup/d" "/etc/crontabs/root" 2>"/dev/null"
+			echo -e "0 $auto_update_time * * * $HP_DIR/scripts/update_crond.sh #${CONF}_autosetup" >> "/etc/crontabs/root"
+			/etc/init.d/cron restart
+		fi
+
+		if ! homeproxy_network_start "$routing_mode" "$proxy_mode" "$outbound_node"; then
+			if ! /etc/init.d/$CONF stop >/dev/null 2>&1; then
+				log "Error: cleanup after network setup failure was incomplete."
+			fi
+			return 1
+		fi
+
+		# sing-box (client)
+		procd_open_instance "sing-box-c"
+
+		procd_set_param command "$PROG"
+		procd_append_param command run --config "$RUN_DIR/sing-box-c.json"
+
+		# QUIC-GO GSO is broken on kernel 6.6 currently
+		uname -r | grep -Eq "^6\.6" && procd_set_param env "QUIC_GO_DISABLE_GSO"="true"
+
+		if [ -x "/sbin/ujail" ] && [ "$routing_mode" != "custom" ] && ! grep -Eq '"type": "(wireguard|tun)"' "$RUN_DIR/sing-box-c.json"; then
+			procd_add_jail "sing-box-c" log procfs
+			procd_add_jail_mount "$RUN_DIR/sing-box-c.json"
+			procd_add_jail_mount_rw "$RUN_DIR/sing-box-c.log"
+			[ "$routing_mode" != "bypass_mainland_china" ] || procd_add_jail_mount_rw "$RUN_DIR/cache.db"
+			procd_add_jail_mount "$HP_DIR/certs/"
+			procd_add_jail_mount "/etc/ssl/"
+			procd_add_jail_mount "/etc/localtime"
+			procd_add_jail_mount "/etc/TZ"
+			procd_set_param capabilities "/etc/capabilities/homeproxy_plus.json"
+			procd_set_param no_new_privs 1
+			procd_set_param user sing-box
+			procd_set_param group sing-box
+		fi
+
+		procd_set_param limits core="unlimited"
+		procd_set_param limits nofile="1000000 1000000"
+		procd_set_param stderr 1
+		procd_set_param respawn
+
+		procd_close_instance
+	fi
+
+	if [ "$server_enabled" = "1" ]; then
+		# sing-box (server)
+		procd_open_instance "sing-box-s"
+
+		procd_set_param command "$PROG"
+		procd_append_param command run --config "$RUN_DIR/sing-box-s.json"
+
+		# QUIC-GO GSO is broken on kernel 6.6 currently
+		uname -r | grep -Eq "^6\.6" && procd_set_param env "QUIC_GO_DISABLE_GSO"="true"
+
+		if [ -x "/sbin/ujail" ]; then
+			procd_add_jail "sing-box-s" log procfs
+			procd_add_jail_mount "$RUN_DIR/sing-box-s.json"
+			procd_add_jail_mount_rw "$RUN_DIR/sing-box-s.log"
+			procd_add_jail_mount_rw "$HP_DIR/certs/"
+			procd_add_jail_mount "/etc/acme/"
+			procd_add_jail_mount "/etc/ssl/"
+			procd_add_jail_mount "/etc/localtime"
+			procd_add_jail_mount "/etc/TZ"
+			procd_set_param capabilities "/etc/capabilities/homeproxy_plus.json"
+			procd_set_param no_new_privs 1
+			procd_set_param user sing-box
+			procd_set_param group sing-box
+		fi
+
+		procd_set_param limits core="unlimited"
+		procd_set_param limits nofile="1000000 1000000"
+		procd_set_param stderr 1
+		procd_set_param respawn
+
+		procd_close_instance
+	fi
+
+	# log-cleaner
+	procd_open_instance "log-cleaner"
+	procd_set_param command "$HP_DIR/scripts/clean_log.sh"
+	procd_set_param respawn
+	procd_close_instance
+
+	case "$routing_mode" in
+	"bypass_mainland_china")
+		# Prepare cache db
+		[ -e "$RUN_DIR/cache.db" ] || touch "$RUN_DIR/cache.db"
+		;;
+	"custom")
+		# Prepare ruleset directory
+		[ -d "$HP_DIR/ruleset" ] || mkdir -p "$HP_DIR/ruleset"
+		;;
+	esac
+
+	[ "$outbound_node" = "nil" ] || echo > "$RUN_DIR/sing-box-c.log"
+	if [ "$server_enabled" = "1" ]; then
+		echo > "$RUN_DIR/sing-box-s.log"
+		mkdir -p "$HP_DIR/certs"
+	fi
+
+	# Update permissions for ujail
+	chown -R sing-box:sing-box "$RUN_DIR"
+
+	# Setup firewall
+	if ! homeproxy_firewall_start "$outbound_node"; then
+		if ! /etc/init.d/$CONF stop >"/dev/null" 2>&1; then
+			log "Error: cleanup after firewall failure was incomplete."
+		fi
+		return 1
+	fi
+
+	log "sing-box $(sing-box version -n) started."
+}
+
+stop_service() {
+	sed -i "/#${CONF}_autosetup/d" "/etc/crontabs/root" 2>"/dev/null"
+	/etc/init.d/cron restart >"/dev/null" 2>&1
+
+	# Setup firewall
+	local cleanup_failed=0
+	if ! homeproxy_firewall_stop; then
+		cleanup_failed=1
+	fi
+
+	if ! homeproxy_network_stop; then
+		cleanup_failed=1
+	fi
+
+	rm -f "$RUN_DIR/sing-box-c.json" "$RUN_DIR/sing-box-c.log" \
+		"$RUN_DIR/sing-box-s.json" "$RUN_DIR/sing-box-s.log"
+	if [ "${HP_PRESERVE_STAGED_CONFIGS:-0}" != "1" ]; then
+		rm -f "$RUN_DIR/sing-box-c.json.new" "$RUN_DIR/sing-box-s.json.new"
+	fi
+
+	log "Service stopped."
+	[ "$cleanup_failed" -eq 0 ]
+}
+
+service_stopped() {
+	local tun_name tun_owner_file="$RUN_DIR/.tun-device" cleanup_failed=0
+
+	if [ -f "$tun_owner_file" ]; then
+		tun_name="$(cat "$tun_owner_file")"
+		if ip link show "$tun_name" >/dev/null 2>&1; then
+			if ! ip link set "$tun_name" down 2>/dev/null ||
+				! ip tuntap del mode tun name "$tun_name" 2>/dev/null; then
+				log "Error: failed to remove owned TUN device $tun_name."
+				cleanup_failed=1
+			fi
+		fi
+		[ "$cleanup_failed" -eq 1 ] || rm -f "$tun_owner_file"
+	fi
+
+	return "$cleanup_failed"
+}
+
+reload_service() {
+	log "Reloading service..."
+
+	config_load "$CONF"
+	local routing_mode outbound_node server_enabled
+	config_get routing_mode "config" "routing_mode" "bypass_mainland_china"
+	if [ "$routing_mode" = "custom" ]; then
+		config_get outbound_node "routing" "default_outbound" "nil"
+	else
+		config_get outbound_node "config" "main_node" "nil"
+	fi
+	get_enabled_server_state
+	server_enabled="$HP_SERVER_ENABLED"
+	if [ "$outbound_node" = "nil" ] && [ "$server_enabled" = "0" ]; then
+		stop
+		return 0
+	fi
+
+	rm -f "$RUN_DIR/sing-box-c.json.new" "$RUN_DIR/sing-box-s.json.new"
+	if [ "$outbound_node" != "nil" ] &&
+		! prepare_config "client" "generate_client.uc" "$RUN_DIR/sing-box-c.json.new"; then
+		rm -f "$RUN_DIR/sing-box-s.json.new"
+		log "Reload aborted; the running service was left untouched."
+		return 1
+	fi
+	if [ "$server_enabled" = "1" ] &&
+		! prepare_config "server" "generate_server.uc" "$RUN_DIR/sing-box-s.json.new"; then
+		rm -f "$RUN_DIR/sing-box-c.json.new" "$RUN_DIR/sing-box-s.json.new"
+		log "Reload aborted; the running service was left untouched."
+		return 1
+	fi
+
+	local client_config="$RUN_DIR/sing-box-c.json"
+	local server_config="$RUN_DIR/sing-box-s.json"
+	local client_backup="$RUN_DIR/sing-box-c.json.reload-backup"
+	local server_backup="$RUN_DIR/sing-box-s.json.reload-backup"
+	local had_client=0 had_server=0
+
+	mkdir -p "$RUN_DIR"
+	rm -f "$client_backup" "$server_backup"
+	if [ -s "$client_config" ]; then
+		if ! cp -p "$client_config" "$client_backup"; then
+			log "Error: failed to preserve the current client configuration."
+			return 1
+		fi
+		had_client=1
+	fi
+	if [ -s "$server_config" ]; then
+		if ! cp -p "$server_config" "$server_backup"; then
+			rm -f "$client_backup"
+			log "Error: failed to preserve the current server configuration."
+			return 1
+		fi
+		had_server=1
+	fi
+
+	HP_PRESERVE_STAGED_CONFIGS=1
+	stop
+	HP_PRESERVE_STAGED_CONFIGS=0
+	HP_CONFIGS_PREPARED=1
+	if start; then
+		HP_CONFIGS_PREPARED=0
+		rm -f "$client_backup" "$server_backup"
+		return 0
+	fi
+	HP_CONFIGS_PREPARED=0
+
+	log "Error: service restart failed; restoring the previous validated configuration."
+	stop
+	if [ "$had_client" = "1" ] && ! mv -f "$client_backup" "$client_config"; then
+		log "Error: failed to restore the previous client configuration."
+	fi
+	if [ "$had_server" = "1" ] && ! mv -f "$server_backup" "$server_config"; then
+		log "Error: failed to restore the previous server configuration."
+	fi
+	rm -f "$client_backup" "$server_backup"
+	rm -f "$RUN_DIR/sing-box-c.json.new" "$RUN_DIR/sing-box-s.json.new"
+	log "Previous configuration files were restored; service restart requires a successful retry."
+	return 1
+}
+
+service_triggers() {
+	procd_add_reload_trigger "$CONF"
+	procd_add_interface_trigger "interface.*.up" wan /etc/init.d/$CONF reload
+}

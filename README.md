@@ -1,0 +1,103 @@
+<!-- Copyright (C) 2026 Cerostep -->
+
+# HomeProxy-Plus
+
+HomeProxy-Plus is an independent LuCI package based on the
+[ImmortalWrt HomeProxy](https://github.com/immortalwrt/homeproxy) source. It
+targets OpenWrt and ImmortalWrt and bundles the verified OpenWrt `sing-box`
+binary from the upstream GitHub release.
+
+The package has its own UCI configuration (`homeproxy_plus`), init service,
+LuCI/RPC identifiers, runtime directory, DNSMasq include, and firewall
+identifiers. It does not replace or import an existing HomeProxy installation.
+Package installation and upgrades migrate only the HomeProxy-Plus UCI
+configuration.
+
+## Quick start
+
+### Requirements
+
+- OpenWrt or ImmortalWrt 24.10 or later.
+- One of the supported package architectures: `aarch64_generic`,
+  `i386_pentium4`, or `x86_64`.
+- LuCI access with administrator privileges.
+
+HomeProxy-Plus bundles its verified `sing-box` binary. Do not install a
+separate sing-box package for this application. Other runtime dependencies
+are declared by the package and must be available from the device's configured
+package feeds.
+
+### Install a release
+
+1. Open the [HomeProxy-Plus Releases](https://github.com/Cerostep/homeproxy-plus/releases)
+   page and download the latest release asset that matches both your device's
+   package architecture and package manager. Use the `.ipk` asset on
+   `opkg`-based systems or the `.apk` asset on `apk`-based systems.
+2. In LuCI, open **System > Software** and use its local package upload/install
+   function to install the downloaded package. If installing over SSH, use
+   your system's package manager and its local-file install command.
+3. If installation reports missing dependencies, update the device's package
+   lists and install from the configured OpenWrt/ImmortalWrt feeds. Do not
+   replace the bundled sing-box binary.
+4. Open **Services > HomeProxy-Plus**. The package can coexist with the
+   original HomeProxy; keep the two applications' settings separate.
+
+### Configure the client
+
+1. In **Node Settings**, either add a node manually, import supported share
+   links, or open **Subscriptions** and add one or more subscription URLs.
+2. If you added subscriptions, save the subscription settings, then click
+   **Update nodes from subscriptions**.
+3. Open **Client Settings > Routing Settings** and select a node in **Main
+   node**. The default routing mode is **Bypass mainland China**; choose a
+   different mode if it better matches your network policy.
+   If you select **Custom routing**, configure **Default outbound** in the
+   custom routing settings instead.
+4. Click **Save & Apply**. The client starts when a main node is selected.
+   The initial configuration uses ports `5430`-`5433` and the TUN device name
+   `singtunp0`; do not assign conflicting resources to another service.
+5. On **Client Settings**, check **Service Status**. Then verify connectivity
+   from a LAN device. The separate **Service Status** page's connection checks
+   test the router's own connectivity and are not a substitute for testing
+   client traffic through the proxy.
+
+To run a server instead, add and enable a server entry in **Server Settings**,
+configure its listen port and credentials, then save and apply. Ensure the
+port is permitted by your firewall and reachable from the intended clients.
+
+### Troubleshooting
+
+- If the client does not start, confirm that a **Main node** is selected and
+  check **Client Settings > Service Status** and the HomeProxy-Plus service
+  log at `/var/run/homeproxy_plus/homeproxy_plus.log`.
+- Check the sing-box client log at `/var/run/homeproxy_plus/sing-box-c.log`
+  for configuration or connection errors. Do not post logs containing
+  subscription URLs, credentials, private keys, or other secrets.
+- For support, include the OpenWrt/ImmortalWrt version, package version,
+  device architecture, and relevant redacted error messages.
+
+## Build
+
+Copy the project sources (excluding the local `tmp/` upstream checkout) into an
+OpenWrt build tree's `package/` directory, then run:
+
+```sh
+make package/luci-app-homeproxy-plus/compile V=s
+```
+
+The GitHub workflow builds architecture-specific IPK and APK artifacts for
+`aarch64_generic` (arm64 generic), `i386_pentium4` (32-bit x86), and `x86_64`.
+It downloads the pinned
+sing-box 1.14.4 OpenWrt package during the build, verifies its SHA-256 against
+the upstream GitHub release digest, and bundles its binary. No sing-box
+download is performed on the device. Other runtime dependencies are resolved
+by the target OpenWrt/ImmortalWrt feed, including `curl` for the LuCI
+connection checks.
+
+See [arch.md](./arch.md) for the binding implementation constraints, AI coding
+tool instructions, and validation requirements.
+
+## License and upstream
+
+The code is licensed under GPL-2.0-only. Copyright notices from the upstream
+project are retained in the files derived from it.

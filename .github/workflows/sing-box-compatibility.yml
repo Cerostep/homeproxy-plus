@@ -1,0 +1,76 @@
+# Copyright (C) 2026 Cerostep
+
+name: sing-box compatibility matrix
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'root/etc/homeproxy_plus/**'
+      - 'htdocs/luci-static/resources/view/homeproxy_plus/**'
+      - 'tests/compatibility/**'
+      - '.github/workflows/sing-box-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - v1.14.0
+          - v1.14.4
+          - latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ matrix.version }}"
+          if [ "$version" = "latest" ]; then
+            version="$(gh release view --repo SagerNet/sing-box --json tagName --jq .tagName)"
+          fi
+          printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "Not a stable semantic version: $version" >&2
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Download sing-box
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sing-box"
+          version="${{ steps.release.outputs.version }}"
+          asset_version="${version#v}"
+          archive_name="sing-box_${asset_version}_openwrt_x86_64.ipk"
+          gh release download "${{ steps.release.outputs.version }}" \
+            --repo SagerNet/sing-box \
+            --pattern "$archive_name" \
+            --dir "$RUNNER_TEMP/sing-box"
+          archive="$RUNNER_TEMP/sing-box/$archive_name"
+          test -s "$archive"
+          release_json="$(gh api "repos/SagerNet/sing-box/releases/tags/${{ steps.release.outputs.version }}")"
+          expected_digest="$(printf '%s' "$release_json" |
+            jq -r --arg name "$archive_name" '.assets[] | select(.name == $name) | .digest' |
+            sed 's/^sha256://')"
+          test -n "$expected_digest"
+          printf '%s  %s\n' "$expected_digest" "$archive" | sha256sum --check
+          tar -xOzf "$archive" data.tar.gz |
+            tar -xzOf - ./usr/bin/sing-box > "$RUNNER_TEMP/sing-box-bin"
+          test -s "$RUNNER_TEMP/sing-box-bin"
+          chmod 0755 "$RUNNER_TEMP/sing-box-bin"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Validate representative config fixtures
+        run: |
+          sing-box-bin version
+          for config in tests/compatibility/*.json; do
+            echo "Validating $config with ${{ steps.release.outputs.version }}"
+            sing-box-bin check --config "$config"
+          done

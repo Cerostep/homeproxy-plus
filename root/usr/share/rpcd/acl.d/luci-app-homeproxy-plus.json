@@ -1,0 +1,24 @@
+{
+	"luci-app-homeproxy-plus": {
+		"description": "Grant access to homeproxy_plus configuration",
+		"read": {
+			"file": {
+				"/etc/homeproxy_plus/scripts/update_subscriptions.uc": [ "exec" ],
+				"/var/run/homeproxy_plus/homeproxy_plus.log": [ "read" ],
+				"/var/run/homeproxy_plus/sing-box-c.log": [ "read" ],
+				"/var/run/homeproxy_plus/sing-box-s.log": [ "read" ]
+			},
+			"ubus": {
+				"service": [ "list" ],
+				"luci.homeproxy_plus": [ "*" ]
+			},
+			"uci": [ "homeproxy_plus" ]
+		},
+		"write": {
+			"file": {
+				"/tmp/homeproxy_plus_certificate.tmp": [ "write" ]
+			},
+			"uci": [ "homeproxy_plus" ]
+		}
+	}
+}

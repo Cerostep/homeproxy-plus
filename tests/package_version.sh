@@ -25,7 +25,8 @@ assert_invalid() {
 }
 
 assert_version '0.1.0_alpha' apk '0.1.0' 'v0.1.0-alpha'
-assert_version '0.1.0_alpha.1' apk '0.1.0' 'v0.1.0-alpha.1'
+assert_version '0.1.0_alpha1' apk '0.1.0' 'v0.1.0-alpha.1'
+assert_version '0.1.0_alpha' apk '0.1.0' 'v0.1.0-alpha'
 assert_version '0.1.0~alpha' ipk '0.1.0' 'v0.1.0-alpha'
 assert_version '0.1.0~alpha.2' ipk '0.1.0' '0.1.0-alpha.2'
 assert_version '0.1.0' apk '0.1.0' 'v0.1.0'

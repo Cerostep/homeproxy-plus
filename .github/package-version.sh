@@ -34,7 +34,7 @@ package_version_for_release_tag() {
 
 	case "$pkg_mgr" in
 	apk)
-		printf '%s_%s\n' "$pkg_version" "$alpha_suffix"
+		printf '%s_%s\n' "$pkg_version" "${alpha_suffix/./}"
 		;;
 	ipk)
 		printf '%s~%s\n' "$pkg_version" "$alpha_suffix"

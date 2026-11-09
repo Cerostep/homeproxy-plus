@@ -28,3 +28,5 @@ jobs:
         run: sh tests/package_identity.sh
       - name: Test existing local route detection
         run: sh tests/service_network_routes.sh
+      - name: Test release package version mapping
+        run: bash tests/package_version.sh

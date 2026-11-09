@@ -9,6 +9,7 @@ set -o pipefail
 PKG_MGR="${1:-apk}"
 RELEASE_TYPE="${2:-snapshot}"
 TARGET_ARCH="${3:?OpenWrt package architecture is required (aarch64_generic, i386_pentium4, or x86_64)}"
+RELEASE_TAG="${4:-${GITHUB_REF_NAME:-}}"
 
 case "$TARGET_ARCH" in
 	aarch64_generic|i386_pentium4|x86_64) ;;
@@ -30,7 +31,9 @@ function get_mk_value() {
 
 PKG_NAME="$(get_mk_value "PKG_NAME")"
 if [ "$RELEASE_TYPE" == "release" ]; then
-	PKG_VERSION="$(get_mk_value "PKG_VERSION")"
+	. "$BASE_DIR/package-version.sh"
+	PKG_VERSION="$(package_version_for_release_tag "$PKG_MGR" \
+		"$(get_mk_value "PKG_VERSION")" "$RELEASE_TAG")"
 else
 	PKG_VERSION="$PKG_SOURCE_DATE_EPOCH~$(git rev-parse --short HEAD)"
 fi

@@ -102,10 +102,11 @@ jobs:
       - name: Build ipk file
         env:
           TARGET_ARCH: ${{ matrix.target_arch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           pushd .github
-          fakeroot bash build-ipk.sh apk "${{ github.event_name }}" "$TARGET_ARCH"
-          fakeroot bash build-ipk.sh ipk "${{ github.event_name }}" "$TARGET_ARCH"
+          fakeroot bash build-ipk.sh apk "${{ github.event_name }}" "$TARGET_ARCH" "$RELEASE_TAG"
+          fakeroot bash build-ipk.sh ipk "${{ github.event_name }}" "$TARGET_ARCH" "$RELEASE_TAG"
           echo "APK_ASSET_NAME=$(find . -maxdepth 1 -name '*.apk' -printf '%f')" >> $GITHUB_ENV
           echo "IPK_ASSET_NAME=$(find . -maxdepth 1 -name '*.ipk' -printf '%f')" >> $GITHUB_ENV
           popd

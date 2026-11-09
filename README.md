@@ -94,6 +94,12 @@ download is performed on the device. Other runtime dependencies are resolved
 by the target OpenWrt/ImmortalWrt feed, including `curl` for the LuCI
 connection checks.
 
+For an Alpha pre-release, create and publish a tag matching
+`v<PKG_VERSION>-alpha.<N>` (for example, `v0.1.0-alpha.1`) as a GitHub
+pre-release. The release workflow uses the tag to version both package
+formats, with package-manager-specific pre-release ordering. The tag's base
+version must match `PKG_VERSION` in `Makefile`.
+
 See [arch.md](./arch.md) for the binding implementation constraints, AI coding
 tool instructions, and validation requirements.
 

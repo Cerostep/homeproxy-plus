@@ -51,6 +51,8 @@ grep -q 'Depends: libc, ca-bundle, curl,' "$ROOT/.github/build-ipk.sh"
 grep -q 'package_version_for_release_tag' "$ROOT/.github/build-ipk.sh"
 grep -q 'RELEASE_TAG=.*GITHUB_REF_NAME' "$ROOT/.github/build-ipk.sh"
 grep -q 'github.event.release.tag_name' "$ROOT/.github/workflows/build-ipk.yml"
+grep -A8 '^  publish:$' "$ROOT/.github/workflows/build-ipk.yml" |
+	grep -q '^      contents: write$'
 grep -q 'node_tcping:' "$ROOT/root/usr/share/rpcd/ucode/luci.homeproxy_plus"
 grep -q 'server_listener_status:' "$ROOT/root/usr/share/rpcd/ucode/luci.homeproxy_plus"
 grep -q "popen('/bin/netstat -ln')" "$ROOT/root/usr/share/rpcd/ucode/luci.homeproxy_plus"

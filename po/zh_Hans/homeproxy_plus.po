@@ -368,6 +368,10 @@ msgstr "清空日志"
 msgid "Client"
 msgstr "客户端"
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Client log level"
+msgstr "客户端日志级别"
+
 #: root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json:14
 msgid "Client Settings"
 msgstr "客户端设置"
@@ -393,6 +397,10 @@ msgstr "正在收集数据中..."
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:267
 msgid "Common ports only (bypass P2P traffic)"
 msgstr "仅常用端口（绕过 P2P 流量）"
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Core Details"
+msgstr "核心详情"
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:698
 #: htdocs/luci-static/resources/view/homeproxy_plus/server.js:354
@@ -2149,6 +2157,10 @@ msgstr "保持与主节点一致"
 msgid "Save"
 msgstr "保存"
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Save settings"
+msgstr "保存设置"
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:1397
 msgid "Save current settings"
 msgstr "保存当前设置"
@@ -2161,6 +2173,10 @@ msgstr "保存订阅设置"
 #: htdocs/luci-static/resources/view/homeproxy_plus/server.js:156
 msgid "Server"
 msgstr "服务器"
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Server log level"
+msgstr "服务端日志级别"
 
 #: root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json:30
 msgid "Server Settings"
@@ -2828,6 +2844,10 @@ msgstr "URLTest 节点"
 msgid "UUID"
 msgstr "UUID"
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Unknown"
+msgstr "未知"
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/status.js:98
 msgid "Unknown error."
 msgstr "未知错误。"
@@ -3090,6 +3110,10 @@ msgstr "sing-box 客户端"
 #: htdocs/luci-static/resources/view/homeproxy_plus/status.js:288
 msgid "sing-box server"
 msgstr "sing-box 服务端"
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "sing-box version"
+msgstr "sing-box 版本"
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:1113
 msgid "uTLS fingerprint"

@@ -299,4 +299,17 @@ for config in "$ROOT"/tests/compatibility/*.json; do
 	jq -e . "$config" >/dev/null
 done
 
+STATUS_VIEW="$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/status.js"
+if grep -q "form.NamedSection, 'config', 'homeproxy_plus', _(" "$STATUS_VIEW"; then
+	echo "Status page sections must be sub-tabs, not titled h3 sections" >&2
+	exit 1
+fi
+grep -q "s.tab('connection', _('Connection check'))" "$STATUS_VIEW"
+grep -q "s.tab('resources', _('Resources management'))" "$STATUS_VIEW"
+grep -q "s.tab('core', _('Core Details'))" "$STATUS_VIEW"
+grep -q "hp.getBuiltinFeatures()" "$STATUS_VIEW"
+grep -q "s.taboption('core', form.ListValue, 'log_level'" "$STATUS_VIEW"
+grep -q "o.ucisection = 'server'" "$STATUS_VIEW"
+grep -q "const LOG_LEVELS = \['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'panic'\]" "$STATUS_VIEW"
+
 echo "Package identity and config-swap checks passed."

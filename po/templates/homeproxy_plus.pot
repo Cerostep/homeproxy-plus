@@ -361,6 +361,10 @@ msgstr ""
 msgid "Client"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Client log level"
+msgstr ""
+
 #: root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json:14
 msgid "Client Settings"
 msgstr ""
@@ -385,6 +389,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:267
 msgid "Common ports only (bypass P2P traffic)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Core Details"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:698
@@ -2114,6 +2122,10 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Save settings"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:1397
 msgid "Save current settings"
 msgstr ""
@@ -2125,6 +2137,10 @@ msgstr ""
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:1146
 #: htdocs/luci-static/resources/view/homeproxy_plus/server.js:156
 msgid "Server"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Server log level"
 msgstr ""
 
 #: root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json:30
@@ -2755,6 +2771,10 @@ msgstr ""
 msgid "UUID"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "Unknown"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/status.js:98
 msgid "Unknown error."
 msgstr ""
@@ -3016,6 +3036,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/status.js:288
 msgid "sing-box server"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/status.js
+msgid "sing-box version"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/node.js:1113

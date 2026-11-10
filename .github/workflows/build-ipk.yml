@@ -116,14 +116,16 @@ jobs:
         with:
           name: ${{ env.APK_ASSET_NAME }}
           path: .github/${{ env.APK_ASSET_NAME }}
-          archive: false
+          archive: true
+          compression-level: 0
 
       - name: Publishing IPK files to GitHub Artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.IPK_ASSET_NAME }}
           path: .github/${{ env.IPK_ASSET_NAME }}
-          archive: false
+          archive: true
+          compression-level: 0
 
   publish:
     if: github.event_name == 'release'

@@ -196,7 +196,7 @@ grep -q "tabmenu.parentNode.insertBefore" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/client.js"
 grep -q "E('h2', {}, _('HomeProxy-Plus'))" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/client.js"
-grep -q "E('p', {}, _('The modern ImmortalWrt proxy platform for ARM64/AMD64.'))" \
+grep -q "E('p', {}, _('A plus edition of HomeProxy for OpenWrt / ImmortalWrt, kept in step with verified stable sing-box releases.'))" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/client.js"
 if grep -q "id: 'status_bar'" "$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/client.js"; then
 	echo "Client service status must not render in the page header area" >&2
@@ -233,7 +233,7 @@ grep -q "tabmenu.parentNode.insertBefore" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/server.js"
 grep -q "E('h2', {}, _('HomeProxy-Plus'))" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/server.js"
-grep -q "E('p', {}, _('The modern ImmortalWrt proxy platform for ARM64/AMD64.'))" \
+grep -q "E('p', {}, _('A plus edition of HomeProxy for OpenWrt / ImmortalWrt, kept in step with verified stable sing-box releases.'))" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/server.js"
 if grep -q "m.section(form.NamedSection, 'server', 'homeproxy_plus'" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/server.js"; then
@@ -278,7 +278,7 @@ for view in node status; do
 		"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/$view.js"
 	grep -q "E('h2', {}, _('HomeProxy-Plus'))" \
 		"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/$view.js"
-	grep -q "E('p', {}, _('The modern ImmortalWrt proxy platform for ARM64/AMD64.'))" \
+	grep -q "E('p', {}, _('A plus edition of HomeProxy for OpenWrt / ImmortalWrt, kept in step with verified stable sing-box releases.'))" \
 		"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/$view.js"
 done
 grep -q "m = new form.Map('homeproxy_plus');" \

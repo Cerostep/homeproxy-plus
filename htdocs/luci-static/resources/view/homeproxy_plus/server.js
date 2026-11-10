@@ -115,7 +115,7 @@ return view.extend({
 				id: 'homeproxy-plus-page-intro'
 			}, [
 				E('h2', {}, _('HomeProxy-Plus')),
-				E('p', {}, _('The modern ImmortalWrt proxy platform for ARM64/AMD64.'))
+				E('p', {}, _('A plus edition of HomeProxy for OpenWrt / ImmortalWrt, kept in step with verified stable sing-box releases.'))
 			]), tabmenu);
 		}
 

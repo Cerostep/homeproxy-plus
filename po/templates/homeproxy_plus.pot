@@ -2577,7 +2577,7 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:102
 #: htdocs/luci-static/resources/view/homeproxy_plus/server.js:130
-msgid "The modern ImmortalWrt proxy platform for ARM64/AMD64."
+msgid "A plus edition of HomeProxy for OpenWrt / ImmortalWrt, kept in step with verified stable sing-box releases."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:449

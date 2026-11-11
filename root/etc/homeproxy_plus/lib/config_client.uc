@@ -12,7 +12,7 @@ import { connect } from 'ubus';
 import { cursor } from 'uci';
 
 import {
-	isEmpty, parseURL, strToBool, strToInt, strToTime,
+	isEmpty, parseURL, shellQuote, strToBool, strToInt, strToTime,
 	validation, HP_DIR, RUN_DIR
 } from '../scripts/homeproxy_plus.uc';
 import { writeValidatedConfig } from './config_validate.uc';
@@ -173,6 +173,31 @@ function parse_dnsquery(strquery) {
 
 	return querys;
 
+}
+
+/* The legacy DNS rule action 'strategy' is rejected by sing-box 1.14+
+ * whenever the DNS configuration also uses new rule items (query_type,
+ * ip_version, evaluate, match_response). Convert it to a query_type match
+ * instead; the IPv4/IPv6 preference priority of prefer_* cannot be kept. */
+function dns_strategy_to_query_type(strategy) {
+	switch (strategy) {
+	case 'ipv4_only':
+		return ['A'];
+	case 'ipv6_only':
+		return ['AAAA'];
+	case 'prefer_ipv4':
+	case 'prefer_ipv6':
+		return ['A', 'AAAA'];
+	}
+	return null;
+}
+
+function warn_migration(message) {
+	system(`printf '%s\\n' ${shellQuote(message)} >&2`);
+}
+
+function warn_dns_strategy_migration(rule_name, strategy) {
+	warn_migration(`DNS rule '${rule_name}': domain_strategy '${strategy}' is deprecated in sing-box 1.14 and was converted to a query_type match; IPv4/IPv6 preference priority is not preserved.`);
 }
 
 function generate_endpoint(node) {
@@ -395,10 +420,10 @@ function needsDnsResponseMatch(cfg) {
 		cfg.rule_set_ip_cidr_match_response === '1';
 }
 
-function getDnsEvaluateRule(cfg) {
+function getDnsEvaluateRule(cfg, query_type) {
 	return {
 		ip_version: strToInt(cfg.ip_version),
-		query_type: parse_dnsquery(cfg.query_type),
+		query_type: query_type,
 		network: cfg.network,
 		protocol: cfg.protocol,
 		domain: cfg.domain,
@@ -569,17 +594,20 @@ if (!isEmpty(main_node)) {
 	});
 
 	/* DNS rules */
-	let dns_use_response_matching = false;
-	let dns_has_domain_strategy = false;
 	uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 		if (cfg.enabled !== '1')
 			return;
 
-		if (needsDnsResponseMatch(cfg))
-			dns_use_response_matching = true;
+		if (cfg.action === 'route' && !isEmpty(cfg.domain_strategy)) {
+			if (!isEmpty(cfg.query_type))
+				die(`DNS rule '${cfg['.name']}': domain_strategy cannot be combined with an explicit query_type in sing-box 1.14+; remove one of them.`);
 
-		if (cfg.action === 'route' && !isEmpty(cfg.domain_strategy))
-			dns_has_domain_strategy = true;
+			if (!dns_strategy_to_query_type(cfg.domain_strategy))
+				die(`DNS rule '${cfg['.name']}': invalid domain_strategy '${cfg.domain_strategy}'.`);
+		}
+
+		if (!isEmpty(cfg.outbound))
+			die(`DNS rule '${cfg['.name']}': the outbound rule item was removed in sing-box 1.14; remove it and set domain_resolver on the referenced node instead.`);
 
 		if (cfg.rule_set_ip_cidr_match_source === '1' &&
 		    cfg.rule_set_ip_cidr_match_response === '1')
@@ -592,20 +620,23 @@ if (!isEmpty(main_node)) {
 			die('DNS rule_set_ip_cidr_accept_empty is no longer supported; remove it and enable rule_set_ip_cidr_match_response for IP-based rule sets.');
 	});
 
-	if (dns_use_response_matching && dns_has_domain_strategy)
-		die('DNS rule domain_strategy cannot be combined with response matching in sing-box 1.14+; clear domain_strategy on DNS rules and use the DNS default strategy instead.');
-
 	uci.foreach(uciconfig, ucidnsrule, (cfg) => {
 		if (cfg.enabled !== '1')
 			return;
 
+		let query_type = parse_dnsquery(cfg.query_type);
+		if (cfg.action === 'route' && !isEmpty(cfg.domain_strategy)) {
+			query_type = dns_strategy_to_query_type(cfg.domain_strategy);
+			warn_dns_strategy_migration(cfg['.name'], cfg.domain_strategy);
+		}
+
 		const match_response = needsDnsResponseMatch(cfg);
 		if (match_response)
-			push(config.dns.rules, getDnsEvaluateRule(cfg));
+			push(config.dns.rules, getDnsEvaluateRule(cfg, query_type));
 
 		push(config.dns.rules, {
 			ip_version: strToInt(cfg.ip_version),
-			query_type: parse_dnsquery(cfg.query_type),
+			query_type: query_type,
 			network: cfg.network,
 			protocol: cfg.protocol,
 			domain: cfg.domain,
@@ -628,10 +659,8 @@ if (!isEmpty(main_node)) {
 			rule_set_ip_cidr_match_source: strToBool(cfg.rule_set_ip_cidr_match_source),
 			match_response: match_response ? true : null,
 			invert: strToBool(cfg.invert),
-			outbound: get_outbound(cfg.outbound),
 			action: cfg.action,
 			server: get_resolver(cfg.server),
-			strategy: cfg.domain_strategy,
 			disable_cache: strToBool(cfg.dns_disable_cache),
 			rewrite_ttl: strToInt(cfg.rewrite_ttl),
 			client_subnet: cfg.client_subnet,
@@ -983,7 +1012,8 @@ if (!isEmpty(main_node)) {
 			udp_connect: strToBool(cfg.udp_connect),
 			udp_timeout: strToTime(cfg.udp_timeout),
 			tls_fragment: strToBool(cfg.tls_fragment),
-			tls_fragment_fallback_delay: strToTime(cfg.tls_fragment_fallback_delay),
+			tls_fragment_fallback_delay: !isEmpty(cfg.tls_fragment_fallback_delay) ?
+				`${cfg.tls_fragment_fallback_delay}ms` : null,
 			tls_record_fragment: strToBool(cfg.tls_record_fragment)
 		});
 	});
@@ -1010,12 +1040,14 @@ if (!isEmpty(main_node)) {
 
 /* Experimental start */
 if (routing_mode in ['bypass_mainland_china', 'custom']) {
+	if (strToBool(cache_file_store_rdrc) || !isEmpty(cache_file_rdrc_timeout))
+		warn_migration('cache_file store_rdrc/rdrc_timeout are deprecated in sing-box 1.14; store_rdrc was migrated to store_dns and rdrc_timeout was dropped (rejected-response caching now follows the DNS cache itself).');
+
 	config.experimental = {
 		cache_file: {
 			enabled: true,
 			path: RUN_DIR + '/cache.db',
-			store_rdrc: strToBool(cache_file_store_rdrc),
-			rdrc_timeout: strToTime(cache_file_rdrc_timeout),
+			store_dns: strToBool(cache_file_store_rdrc)
 		}
 	};
 }

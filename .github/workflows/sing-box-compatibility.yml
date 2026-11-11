@@ -10,7 +10,7 @@ on:
     paths:
       - 'root/etc/homeproxy_plus/**'
       - 'htdocs/luci-static/resources/view/homeproxy_plus/**'
-      - 'tests/compatibility/**'
+      - 'tests/generate_client_config_matrix.sh'
       - '.github/workflows/sing-box-compatibility.yml'
 
 permissions:
@@ -67,10 +67,10 @@ jobs:
           test -s "$RUNNER_TEMP/sing-box-bin"
           chmod 0755 "$RUNNER_TEMP/sing-box-bin"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Validate representative config fixtures
+      - name: Run generated configuration matrix
         run: |
-          sing-box-bin version
-          for config in tests/compatibility/*.json; do
-            echo "Validating $config with ${{ steps.release.outputs.version }}"
-            sing-box-bin check --config "$config"
-          done
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ucode
+          sudo install -m 0755 "$RUNNER_TEMP/sing-box-bin" /usr/bin/sing-box
+          /usr/bin/sing-box version
+          sh tests/generate_client_config_matrix.sh

@@ -23,6 +23,7 @@ if head -n 1 "$ROOT/root/etc/homeproxy_plus/lib/config_server.uc" | grep -q '^#!
 fi
 test -f "$ROOT/root/etc/homeproxy_plus/lib/config_validate.uc"
 test -f "$ROOT/tests/generate_client_config.sh"
+test -f "$ROOT/tests/generate_client_config_matrix.sh"
 test -f "$ROOT/.github/fetch-sing-box.sh"
 test -f "$ROOT/root/etc/homeproxy_plus/scripts/service_network.sh"
 test -f "$ROOT/root/etc/homeproxy_plus/scripts/firewall_lifecycle.sh"
@@ -95,8 +96,6 @@ done
 
 jq -e . "$ROOT/root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json" >/dev/null
 jq -e . "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
-jq -e . "$ROOT/tests/compatibility/minimal.json" >/dev/null
-
 grep -q "executeCommand('/usr/bin/sing-box', 'check'" \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_validate.uc"
 ! grep -q '+sing-box' "$ROOT/Makefile"
@@ -170,6 +169,22 @@ grep -q 'writeValidatedConfig(config, RUN_DIR' \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_server.uc"
 grep -Fq "getenv('HP_CLIENT_CONFIG_OUTPUT')" \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+grep -q 'dns_strategy_to_query_type' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+grep -q "case 'prefer_ipv4':" \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+grep -q 'domain_strategy cannot be combined with an explicit query_type' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+grep -q 'the outbound rule item was removed in sing-box 1.14' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+grep -q 'store_dns: strToBool(cache_file_store_rdrc)' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+! grep -q 'store_rdrc: strToBool\|rdrc_timeout: strToTime' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc"
+# DNS rules must not emit the legacy strategy action option rejected by
+# sing-box 1.14+; only outbound domain_resolver blocks may keep it.
+test "$(grep -c 'strategy: cfg.domain_strategy' \
+	"$ROOT/root/etc/homeproxy_plus/lib/config_client.uc")" -eq 2
 grep -q 'ucode -L "$HP_DIR/scripts" -S "$GENERATOR"' \
 	"$ROOT/tests/generate_client_config.sh"
 grep -q '/usr/bin/sing-box check --config "$CONFIG"' \
@@ -295,10 +310,6 @@ jq -r '.supported_versions[]' "$ROOT/root/etc/homeproxy_plus/lib/singbox-version
 	while IFS= read -r version; do
 		grep -q -- "- v$version" "$ROOT/.github/workflows/sing-box-compatibility.yml"
 	done
-for config in "$ROOT"/tests/compatibility/*.json; do
-	jq -e . "$config" >/dev/null
-done
-
 STATUS_VIEW="$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/status.js"
 if grep -q "form.NamedSection, 'config', 'homeproxy_plus', _(" "$STATUS_VIEW"; then
 	echo "Status page sections must be sub-tabs, not titled h3 sections" >&2

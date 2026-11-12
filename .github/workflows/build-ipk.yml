@@ -136,6 +136,19 @@ jobs:
       - name: Checkout source tree
         uses: actions/checkout@v6
 
+      - name: Checkout usign
+        uses: actions/checkout@v6
+        with:
+          repository: openwrt/usign
+          ref: c4c72b1b07945ee192361dc751291a7c98d6adcd
+          path: usign
+
+      - name: Build usign
+        run: |
+          cmake -S usign -B usign/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build usign/build --parallel
+          sudo install -m0755 usign/build/usign /usr/local/bin/usign
+
       - name: Download package artifacts
         uses: actions/download-artifact@v7
         with:
@@ -145,6 +158,23 @@ jobs:
       - name: Generate opkg feed index
         run: bash .github/create-ipk-feed-index.sh .
 
+      - name: Sign opkg feed index
+        env:
+          USIGN_SECRET_KEY: ${{ secrets.USIGN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$USIGN_SECRET_KEY" ]; then
+            echo "GitHub Actions secret USIGN_SECRET_KEY is required to publish the IPK feed." >&2
+            exit 1
+          fi
+          signing_key="$RUNNER_TEMP/homeproxy-plus-feed-secret.key"
+          umask 077
+          trap 'rm -f "$signing_key"' EXIT
+          printf '%s\n' "$USIGN_SECRET_KEY" > "$signing_key"
+          unset USIGN_SECRET_KEY
+          bash .github/sign-ipk-feed.sh \
+            "$signing_key" .github/homeproxy-plus-feed.pub .
+
       - name: Publishing to GitHub Releases
         uses: svenstaro/upload-release-action@v2
         with:
@@ -153,9 +183,18 @@ jobs:
           file_glob: true
           tag: ${{ github.ref }}
 
-      - name: Publishing opkg feed index
+      - name: Publishing signed opkg feed index
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ github.token }}
-          file: Packages.gz
+          file: Packages.*
+          file_glob: true
+          tag: ${{ github.ref }}
+
+      - name: Publishing opkg feed public key
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ github.token }}
+          file: .github/homeproxy-plus-feed.pub
+          asset_name: homeproxy-plus-feed.pub
           tag: ${{ github.ref }}

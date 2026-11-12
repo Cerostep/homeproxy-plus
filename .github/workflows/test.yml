@@ -11,6 +11,8 @@ on:
       - '.github/build-ipk.sh'
       - '.github/package-version.sh'
       - '.github/create-ipk-feed-index.sh'
+      - '.github/sign-ipk-feed.sh'
+      - '.github/homeproxy-plus-feed.pub'
       - '.github/workflows/build-ipk.yml'
       - 'root/**'
       - 'htdocs/**'
@@ -21,17 +23,33 @@ on:
       - '.github/build-ipk.sh'
       - '.github/package-version.sh'
       - '.github/create-ipk-feed-index.sh'
+      - '.github/sign-ipk-feed.sh'
+      - '.github/homeproxy-plus-feed.pub'
       - '.github/workflows/build-ipk.yml'
       - 'root/**'
       - 'htdocs/**'
       - 'tests/**'
       - '.github/workflows/test.yml'
 
+permissions:
+  contents: read
+
 jobs:
   static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Checkout usign
+        uses: actions/checkout@v6
+        with:
+          repository: openwrt/usign
+          ref: c4c72b1b07945ee192361dc751291a7c98d6adcd
+          path: usign
+      - name: Build usign
+        run: |
+          cmake -S usign -B usign/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build usign/build --parallel
+          sudo install -m0755 usign/build/usign /usr/local/bin/usign
       - name: Validate package identity and scripts
         run: sh tests/package_identity.sh
       - name: Test existing local route detection
@@ -42,3 +60,5 @@ jobs:
         run: bash tests/package_build_metadata.sh
       - name: Test IPK feed index metadata
         run: bash tests/package_feed_index.sh
+      - name: Test IPK feed signature
+        run: bash tests/package_feed_signature.sh

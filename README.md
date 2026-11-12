@@ -42,6 +42,43 @@ package feeds.
 4. Open **Services > HomeProxy-Plus**. The package can coexist with the
    original HomeProxy; keep the two applications' settings separate.
 
+#### Install from the signed opkg feed
+
+On `opkg`-based systems, you can install and update HomeProxy-Plus directly
+from its signed package feed. First add the trusted public key, then configure
+the feed and install the package:
+
+```sh
+curl -fsSLo /tmp/homeproxy-plus-feed.pub \
+  https://raw.githubusercontent.com/Cerostep/homeproxy-plus/master/.github/homeproxy-plus-feed.pub
+test "$(usign -F -p /tmp/homeproxy-plus-feed.pub)" = 'a776627ae8fe95d2'
+opkg-key add /tmp/homeproxy-plus-feed.pub
+grep -q '^src/gz homeproxy_plus ' /etc/opkg/customfeeds.conf ||
+  echo 'src/gz homeproxy_plus https://github.com/Cerostep/homeproxy-plus/releases/latest/download' >> /etc/opkg/customfeeds.conf
+opkg update
+opkg install luci-app-homeproxy-plus
+```
+
+The feed is signed with `usign`; do not disable package signature verification.
+It is available after a release publishes the signed feed index. See
+[IPK software feed](./doc/package-feed.md) for details.
+
+If direct access to GitHub is restricted, use the GH-Proxy URLs instead:
+
+```sh
+curl -fsSLo /tmp/homeproxy-plus-feed.pub \
+  https://gh-proxy.org/https://github.com/Cerostep/homeproxy-plus/releases/latest/download/homeproxy-plus-feed.pub
+test "$(usign -F -p /tmp/homeproxy-plus-feed.pub)" = 'a776627ae8fe95d2'
+opkg-key add /tmp/homeproxy-plus-feed.pub
+grep -q '^src/gz homeproxy_plus ' /etc/opkg/customfeeds.conf ||
+  echo 'src/gz homeproxy_plus https://gh-proxy.org/https://github.com/Cerostep/homeproxy-plus/releases/latest/download' >> /etc/opkg/customfeeds.conf
+opkg update
+opkg install luci-app-homeproxy-plus
+```
+
+The proxy changes only the download route. The feed signature is still checked
+against the pinned public-key fingerprint.
+
 ### Configure the client
 
 1. In **Node Settings**, either add a node manually, import supported share

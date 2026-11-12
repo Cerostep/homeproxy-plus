@@ -25,7 +25,7 @@ BASE_DIR="$(cd "$(dirname $0)"; pwd)"
 PKG_DIR="$BASE_DIR/.."
 
 PKG_NAME="luci-app-homeproxy-plus"
-PKG_BASE_VERSION="0.1.1"
+PKG_BASE_VERSION="0.1.2"
 if [ "$RELEASE_TYPE" == "release" ]; then
 	. "$BASE_DIR/package-version.sh"
 	PKG_VERSION="$(package_version_for_release_tag "$PKG_MGR" \

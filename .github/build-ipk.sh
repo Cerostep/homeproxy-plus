@@ -142,7 +142,7 @@ else
 		Maintainer: HomeProxy-Plus contributors
 		Architecture: $TARGET_ARCH
 		Installed-Size: TO-BE-FILLED-BY-IPKG-BUILD
-		Description:  HomeProxy-Plus proxy platform for OpenWrt
+		Description: HomeProxy-Plus proxy platform for OpenWrt
 	EOF
 	chmod 0644 "$TEMP_PKG_DIR/CONTROL/control"
 

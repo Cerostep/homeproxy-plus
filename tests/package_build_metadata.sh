@@ -40,6 +40,8 @@ arch="$(sed -n 's/^Architecture: //p' "$control")"
 test "$name" = 'luci-app-homeproxy-plus'
 test "$arch" = 'x86_64'
 test -s "$3/usr/bin/sing-box"
+sed -i 's/^Installed-Size: .*/Installed-Size: 1234/' "$control"
+cp "$control" "$FIXTURE_DIR/ipk-control"
 cp "$3/CONTROL/postinst-pkg" "$FIXTURE_DIR/ipk-postinst-pkg"
 touch "$4/${name}_${version}_${arch}.ipk"
 EOF
@@ -79,12 +81,21 @@ chmod +x "$TEST_DIR/bin/"*
 export PATH="$TEST_DIR/bin:$PATH"
 export FIXTURE_DIR="$TEST_DIR"
 
+assert_ipk_metadata() {
+	test "$(sed -n 's/^Installed-Size: //p' "$TEST_DIR/ipk-control")" = '1234'
+	grep -Fxq 'Description: HomeProxy-Plus proxy platform for OpenWrt' "$TEST_DIR/ipk-control"
+}
+
 bash "$TEST_DIR/.github/build-ipk.sh" ipk release x86_64 "v${base_version}-alpha.1"
-test -f "$TEST_DIR/.github/luci-app-homeproxy-plus_${base_version}~alpha.1_x86_64.ipk"
+ipk_file="$TEST_DIR/.github/luci-app-homeproxy-plus_${base_version}~alpha.1_x86_64.ipk"
+test -f "$ipk_file"
+assert_ipk_metadata
 bash "$TEST_DIR/.github/build-ipk.sh" apk release x86_64 "v${base_version}-alpha.1"
 test -f "$TEST_DIR/.github/luci-app-homeproxy-plus_${base_version}_alpha1_x86_64.apk"
 bash "$TEST_DIR/.github/build-ipk.sh" ipk snapshot x86_64
-compgen -G "$TEST_DIR/.github/luci-app-homeproxy-plus_*~abc1234_x86_64.ipk" >/dev/null
+ipk_file="$(compgen -G "$TEST_DIR/.github/luci-app-homeproxy-plus_*~abc1234_x86_64.ipk")"
+test -n "$ipk_file"
+assert_ipk_metadata
 
 if bash "$TEST_DIR/.github/build-ipk.sh" ipk release x86_64 v999999.0.0 2>/dev/null; then
 	echo "Mismatched release tag was accepted." >&2

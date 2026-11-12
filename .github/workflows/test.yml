@@ -10,6 +10,8 @@ on:
     paths:
       - '.github/build-ipk.sh'
       - '.github/package-version.sh'
+      - '.github/create-ipk-feed-index.sh'
+      - '.github/workflows/build-ipk.yml'
       - 'root/**'
       - 'htdocs/**'
       - 'tests/**'
@@ -18,6 +20,8 @@ on:
     paths:
       - '.github/build-ipk.sh'
       - '.github/package-version.sh'
+      - '.github/create-ipk-feed-index.sh'
+      - '.github/workflows/build-ipk.yml'
       - 'root/**'
       - 'htdocs/**'
       - 'tests/**'
@@ -36,3 +40,5 @@ jobs:
         run: bash tests/package_version.sh
       - name: Test standalone package metadata
         run: bash tests/package_build_metadata.sh
+      - name: Test IPK feed index metadata
+        run: bash tests/package_feed_index.sh

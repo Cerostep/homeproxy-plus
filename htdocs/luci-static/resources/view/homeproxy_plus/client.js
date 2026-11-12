@@ -117,7 +117,7 @@ return view.extend({
 		}
 
 		let features = data[1],
-		    hosts = data[2]?.hosts;
+		    hosts = data[2]?.hosts || {};
 
 		/* Cache all configured proxy nodes, they will be called multiple times */
 		let proxy_nodes = {};

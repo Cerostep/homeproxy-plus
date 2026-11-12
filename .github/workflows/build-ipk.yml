@@ -12,7 +12,6 @@ on:
       - 'htdocs/**'
       - 'po/**'
       - 'root/**'
-      - 'Makefile'
       - '.github/**'
       - '!.github/ISSUE_TEMPLATE/**'
 
@@ -28,7 +27,6 @@ on:
     paths:
       - 'htdocs/**'
       - 'root/**'
-      - 'Makefile'
       - '.github/**'
       - '!.github/ISSUE_TEMPLATE/**'
 

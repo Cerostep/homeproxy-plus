@@ -104,12 +104,16 @@ This does not confirm external reachability or authentication.
 
 ## Build
 
-Copy the project sources (excluding the local `tmp/` upstream checkout) into an
-OpenWrt build tree's `package/` directory, then run:
+Build standalone packages with the tools used by the GitHub workflow (`curl`,
+`po2lmo`, and `ipkg-build` for IPK or `apk` for APK):
 
 ```sh
-make package/luci-app-homeproxy-plus/compile V=s
+bash .github/build-ipk.sh ipk snapshot x86_64
+bash .github/build-ipk.sh apk snapshot x86_64
 ```
+
+Replace `x86_64` with the target package architecture. Output files are placed
+in `.github/`.
 
 The GitHub workflow builds architecture-specific IPK and APK artifacts for
 `aarch64_generic` (arm64 generic), `i386_pentium4` (32-bit x86), and `x86_64`.
@@ -124,7 +128,7 @@ For an Alpha pre-release, create and publish a tag matching
 `v<PKG_VERSION>-alpha.<N>` (for example, `v0.1.0-alpha.1`) as a GitHub
 pre-release. The release workflow uses the tag to version both package
 formats, with package-manager-specific pre-release ordering. The tag's base
-version must match `PKG_VERSION` in `Makefile`.
+version must match `PKG_BASE_VERSION` in `.github/build-ipk.sh`.
 
 See [arch.md](./arch.md) for the binding implementation constraints, AI coding
 tool instructions, and validation requirements.

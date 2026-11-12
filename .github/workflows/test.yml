@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Cerostep
+
 name: Test HomeProxy-Plus
 
 on:
@@ -6,14 +8,16 @@ on:
       - master
       - main
     paths:
-      - 'Makefile'
+      - '.github/build-ipk.sh'
+      - '.github/package-version.sh'
       - 'root/**'
       - 'htdocs/**'
       - 'tests/**'
       - '.github/workflows/test.yml'
   pull_request:
     paths:
-      - 'Makefile'
+      - '.github/build-ipk.sh'
+      - '.github/package-version.sh'
       - 'root/**'
       - 'htdocs/**'
       - 'tests/**'
@@ -30,3 +34,5 @@ jobs:
         run: sh tests/service_network_routes.sh
       - name: Test release package version mapping
         run: bash tests/package_version.sh
+      - name: Test standalone package metadata
+        run: bash tests/package_build_metadata.sh

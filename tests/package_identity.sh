@@ -47,7 +47,6 @@ test ! -e "$ROOT/root/etc/init.d/homeproxy"
 test ! -e "$ROOT/root/etc/capabilities/homeproxy.json"
 grep -q '/usr/bin/curl --head.*--max-time 3' \
 	"$ROOT/root/usr/share/rpcd/ucode/luci.homeproxy_plus"
-grep -q '+curl' "$ROOT/Makefile"
 grep -q 'Depends: libc, ca-bundle, curl,' "$ROOT/.github/build-ipk.sh"
 grep -q 'package_version_for_release_tag' "$ROOT/.github/build-ipk.sh"
 grep -q 'RELEASE_TAG=.*GITHUB_REF_NAME' "$ROOT/.github/build-ipk.sh"
@@ -84,7 +83,7 @@ grep -q 'poll.add(refreshNodeLatencies, 60)' \
 
 if grep -R -n -E \
 	'(/etc/config/homeproxy([./"]|$)|/etc/homeproxy/|/var/run/homeproxy/|luci\.homeproxy([ "'\'']|$)|luci-app-homeproxy([ "'\'']|$))' \
-	"$ROOT/Makefile" "$ROOT/root" "$ROOT/htdocs"; then
+	"$ROOT/.github/build-ipk.sh" "$ROOT/root" "$ROOT/htdocs"; then
 	echo "Found a runtime namespace that can collide with HomeProxy." >&2
 	exit 1
 fi
@@ -98,9 +97,8 @@ jq -e . "$ROOT/root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json" >/dev/nu
 jq -e . "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
 grep -q "executeCommand('/usr/bin/sing-box', 'check'" \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_validate.uc"
-! grep -q '+sing-box' "$ROOT/Makefile"
-grep -q 'LUCI_PKGARCH:=$(ARCH_PACKAGES)' "$ROOT/Makefile"
-grep -q 'USERID:=sing-box=5566:sing-box=5566' "$ROOT/Makefile"
+grep -q 'PKG_NAME="luci-app-homeproxy-plus"' "$ROOT/.github/build-ipk.sh"
+grep -q 'sing-box=5566:sing-box=5566' "$ROOT/.github/build-ipk.sh"
 grep -q 'Require-User: sing-box=5566:sing-box=5566' "$ROOT/.github/build-ipk.sh"
 grep -Eq 'aarch64_generic|i386_pentium4|x86_64' "$ROOT/.github/fetch-sing-box.sh"
 grep -q 'openwrt_x86_64.ipk' "$ROOT/.github/workflows/sing-box-compatibility.yml"

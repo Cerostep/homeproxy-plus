@@ -18,7 +18,7 @@ package_version_for_release_tag() {
 	local prerelease_number="${BASH_REMATCH[7]}"
 
 	if [ "$release_version" != "$pkg_version" ]; then
-		echo "Release tag version $release_version does not match Makefile PKG_VERSION $pkg_version." >&2
+		echo "Release tag version $release_version does not match package base version $pkg_version." >&2
 		return 1
 	fi
 

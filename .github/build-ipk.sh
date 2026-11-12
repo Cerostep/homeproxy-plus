@@ -1,6 +1,5 @@
 #!/bin/bash
 # Copyright (C) 2026 Cerostep
-# SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2023 Tianling Shen <cnsztl@immortalwrt.org>
 
 set -o errexit
@@ -25,15 +24,12 @@ export SOURCE_DATE_EPOCH="$PKG_SOURCE_DATE_EPOCH"
 BASE_DIR="$(cd "$(dirname $0)"; pwd)"
 PKG_DIR="$BASE_DIR/.."
 
-function get_mk_value() {
-	awk -F "$1:=" '{print $2}' "$PKG_DIR/Makefile" | xargs
-}
-
-PKG_NAME="$(get_mk_value "PKG_NAME")"
+PKG_NAME="luci-app-homeproxy-plus"
+PKG_BASE_VERSION="0.1.0"
 if [ "$RELEASE_TYPE" == "release" ]; then
 	. "$BASE_DIR/package-version.sh"
 	PKG_VERSION="$(package_version_for_release_tag "$PKG_MGR" \
-		"$(get_mk_value "PKG_VERSION")" "$RELEASE_TAG")"
+		"$PKG_BASE_VERSION" "$RELEASE_TAG")"
 else
 	PKG_VERSION="$PKG_SOURCE_DATE_EPOCH~$(git rev-parse --short HEAD)"
 fi
@@ -161,11 +157,43 @@ default_postinst $0 $@' > "$TEMP_PKG_DIR/CONTROL/postinst"
 }" > "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
 
-	echo -e '#!/bin/sh
-[ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
-. ${IPKG_INSTROOT}/lib/functions.sh
-default_prerm $0 $@' > "$TEMP_PKG_DIR/CONTROL/prerm"
+
+	cat > "$TEMP_PKG_DIR/CONTROL/prerm" <<'EOF'
+#!/bin/sh
+
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+[ -s "${IPKG_INSTROOT}/lib/functions.sh" ] || exit 0
+
+. "${IPKG_INSTROOT}/lib/functions.sh"
+default_prerm "$0" "$@"
+
+exit 0
+EOF
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/prerm"
+
+	cat > "$TEMP_PKG_DIR/CONTROL/postrm" <<'EOF'
+#!/bin/sh
+
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+
+# Avoid modifying the host filesystem during offline operations
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+
+# Remove HomeProxy-Plus configuration
+rm -f /etc/config/homeproxy_plus
+rm -rf /etc/homeproxy_plus
+
+# Remove runtime data
+rm -rf /var/run/homeproxy_plus
+rm -rf /etc/init.d/homeproxy_plus
+
+# Remove HomeProxy-Plus static resources
+rm -rf /www/luci-static/resources/homeproxy_plus
+
+exit 0
+EOF
+	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postrm"
+
 
 	ipkg-build -m "" "$TEMP_PKG_DIR" "$TEMP_DIR"
 

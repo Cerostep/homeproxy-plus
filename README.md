@@ -76,6 +76,32 @@ port is permitted by your firewall and reachable from the intended clients.
 - For support, include the OpenWrt/ImmortalWrt version, package version,
   device architecture, and relevant redacted error messages.
 
+## Interface overview
+
+### Routing Settings
+
+Configure routing, proxy mode, DNS, and access control using the client tabs.
+Available options depend on the selected routing mode.
+
+![Routing Settings in custom routing mode](./doc/images/main.png)
+
+### Node Settings
+
+Add nodes, import share links, or manage subscriptions. The **Latency** column
+periodically shows TCP connection time to each node, or `Timeout`, `Failed`,
+or `N/A`. It does not measure proxy traffic or verify the proxy protocol.
+
+![Node Settings with latency results](./doc/images/node.png)
+
+### Server Settings
+
+Manage servers and view their status. **Active** means a matching local
+listener was found; **Stopped** means it was not found or the server is
+disabled. **Probe unavailable** indicates that the status could not be checked.
+This does not confirm external reachability or authentication.
+
+![Server Settings with listener status](./doc/images/server.png)
+
 ## Build
 
 Copy the project sources (excluding the local `tmp/` upstream checkout) into an

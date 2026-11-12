@@ -75,10 +75,13 @@ if [ "$PKG_MGR" == "apk" ]; then
 export root="${IPKG_INSTROOT}"
 export pkgname="'"$PKG_NAME"'"
 add_group_and_user
-default_postinst
+default_postinst || exit $?
 [ -n "${IPKG_INSTROOT}" ] || { rm -f /tmp/luci-indexcache.*
 	rm -rf /tmp/luci-modulecache/
-	killall -HUP rpcd 2>/dev/null
+	/etc/init.d/rpcd reload || {
+		echo "HomeProxy-Plus: failed to reload rpcd after installation" >&2
+		exit 1
+	}
 	exit 0
 }' > "$TEMP_DIR/post-install"
 
@@ -91,10 +94,13 @@ export PKG_UPGRADE=1
 export root="${IPKG_INSTROOT}"
 export pkgname="'"$PKG_NAME"'"
 add_group_and_user
-default_postinst
+default_postinst || exit $?
 [ -n "${IPKG_INSTROOT}" ] || { rm -f /tmp/luci-indexcache.*
 	rm -rf /tmp/luci-modulecache/
-	killall -HUP rpcd 2>/dev/null
+	/etc/init.d/rpcd reload || {
+		echo "HomeProxy-Plus: failed to reload rpcd after upgrade" >&2
+		exit 1
+	}
 	exit 0
 }' > "$TEMP_DIR/post-upgrade"
 
@@ -149,12 +155,17 @@ else
 default_postinst $0 $@' > "$TEMP_PKG_DIR/CONTROL/postinst"
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postinst"
 
-	echo -e "[ -n "\${IPKG_INSTROOT}" ] || {
-	(. /etc/uci-defaults/$PKG_NAME) && rm -f /etc/uci-defaults/$PKG_NAME
-	rm -f /tmp/luci-indexcache
-	rm -rf /tmp/luci-modulecache/
-	exit 0
-}" > "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
+	cat > "$TEMP_PKG_DIR/CONTROL/postinst-pkg" <<'EOF'
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+
+rm -f /tmp/luci-indexcache
+rm -rf /tmp/luci-modulecache/
+/etc/init.d/rpcd reload || {
+	echo 'HomeProxy-Plus: failed to reload rpcd after installation or upgrade' >&2
+	exit 1
+}
+exit 0
+EOF
 	chmod 0755 "$TEMP_PKG_DIR/CONTROL/postinst-pkg"
 
 

@@ -40,6 +40,7 @@ arch="$(sed -n 's/^Architecture: //p' "$control")"
 test "$name" = 'luci-app-homeproxy-plus'
 test "$arch" = 'x86_64'
 test -s "$3/usr/bin/sing-box"
+cp "$3/CONTROL/postinst-pkg" "$FIXTURE_DIR/ipk-postinst-pkg"
 touch "$4/${name}_${version}_${arch}.ipk"
 EOF
 cat > "$TEST_DIR/bin/apk" <<'EOF'
@@ -59,6 +60,12 @@ while [ "$#" -gt 0 ]; do
 			shift 2 ;;
 		--files) files="$2"; shift 2 ;;
 		--output) output="$2"; shift 2 ;;
+		--script)
+			case "$2" in
+				post-install:*) cp "${2#post-install:}" "$FIXTURE_DIR/apk-post-install" ;;
+				post-upgrade:*) cp "${2#post-upgrade:}" "$FIXTURE_DIR/apk-post-upgrade" ;;
+			esac
+			shift 2 ;;
 		*) shift 2 ;;
 	esac
 done
@@ -70,6 +77,7 @@ touch "$output"
 EOF
 chmod +x "$TEST_DIR/bin/"*
 export PATH="$TEST_DIR/bin:$PATH"
+export FIXTURE_DIR="$TEST_DIR"
 
 bash "$TEST_DIR/.github/build-ipk.sh" ipk release x86_64 "v${base_version}-alpha.1"
 test -f "$TEST_DIR/.github/luci-app-homeproxy-plus_${base_version}~alpha.1_x86_64.ipk"
@@ -82,5 +90,64 @@ if bash "$TEST_DIR/.github/build-ipk.sh" ipk release x86_64 v999999.0.0 2>/dev/n
 	echo "Mismatched release tag was accepted." >&2
 	exit 1
 fi
+
+cat > "$TEST_DIR/functions.sh" <<'EOF'
+add_group_and_user() { :; }
+default_postinst() {
+	echo default_postinst >> "$FIXTURE_DIR/calls"
+	return "${DEFAULT_POSTINST_STATUS:-0}"
+}
+EOF
+cat > "$TEST_DIR/rpcd" <<'EOF'
+#!/bin/sh
+echo "rpcd $*" >> "$FIXTURE_DIR/calls"
+exit "${RPCD_RELOAD_STATUS:-0}"
+EOF
+cat > "$TEST_DIR/ignore-rm" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$TEST_DIR/rpcd" "$TEST_DIR/ignore-rm"
+
+for script in ipk-postinst-pkg apk-post-install apk-post-upgrade; do
+	sed -e 's@${IPKG_INSTROOT}/lib/functions.sh@'"$TEST_DIR"'/functions.sh@g' \
+		-e 's@/etc/init.d/rpcd@'"$TEST_DIR"'/rpcd@g' \
+		-e 's@rm -f @'"$TEST_DIR"'/ignore-rm -f @g' \
+		-e 's@rm -rf @'"$TEST_DIR"'/ignore-rm -rf @g' \
+		"$TEST_DIR/$script" > "$TEST_DIR/$script.test"
+
+	: > "$TEST_DIR/calls"
+	IPKG_INSTROOT= sh "$TEST_DIR/$script.test"
+	test "$(grep -c '^rpcd reload$' "$TEST_DIR/calls")" -eq 1
+
+	: > "$TEST_DIR/calls"
+	if IPKG_INSTROOT= RPCD_RELOAD_STATUS=1 sh "$TEST_DIR/$script.test" 2>"$TEST_DIR/error"; then
+		echo "$script accepted an rpcd reload failure." >&2
+		exit 1
+	fi
+	grep -q 'failed to reload rpcd' "$TEST_DIR/error"
+
+	: > "$TEST_DIR/calls"
+	IPKG_INSTROOT="$TEST_DIR/offline" sh "$TEST_DIR/$script.test"
+	if grep -q '^rpcd ' "$TEST_DIR/calls"; then
+		echo "$script reloaded rpcd during an offline installation." >&2
+		exit 1
+	fi
+done
+
+for script in apk-post-install apk-post-upgrade; do
+	: > "$TEST_DIR/calls"
+	if IPKG_INSTROOT= DEFAULT_POSTINST_STATUS=1 sh "$TEST_DIR/$script.test"; then
+		echo "$script accepted a default_postinst failure." >&2
+		exit 1
+	fi
+	if grep -q '^rpcd ' "$TEST_DIR/calls"; then
+		echo "$script reloaded rpcd after default_postinst failed." >&2
+		exit 1
+	fi
+	: > "$TEST_DIR/calls"
+	IPKG_INSTROOT= IPKG_NO_SCRIPT=1 sh "$TEST_DIR/$script.test"
+	test ! -s "$TEST_DIR/calls"
+done
 
 echo "Standalone package metadata checks passed with fixture packaging tools."

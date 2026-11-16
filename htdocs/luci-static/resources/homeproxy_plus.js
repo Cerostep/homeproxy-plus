@@ -7,11 +7,19 @@
 
 'use strict';
 'require baseclass';
+'require dom';
 'require form';
 'require fs';
 'require rpc';
 'require uci';
 'require ui';
+
+function sectionIdForName(name) {
+	/* UCI section names cannot contain hyphens. */
+	return name.includes('-')
+		? 'hph_' + name.replace(/_/g, '_u').replace(/-/g, '_h')
+		: name;
+}
 
 return baseclass.extend({
 	dns_strategy: {
@@ -239,27 +247,70 @@ return baseclass.extend({
 	},
 
 	renderSectionAdd(section, extra_class) {
-		let el = form.GridSection.prototype.renderSectionAdd.apply(section, [ extra_class ]),
-			nameEl = el.querySelector('.cbi-section-create-name');
+		if (!section.addremove)
+			return E([]);
 
-		ui.addValidator(nameEl, 'string', true, (v) => {
-			let button = el.querySelector('.cbi-section-create > .cbi-button-add');
-			let uciconfig = section.uciconfig || section.map.config;
+		let uciconfig = section.uciconfig || section.map.config;
+		let title = section.titleFn('addbtntitle') || _('Add');
+		let nameEl = E('input', {
+			'type': 'text',
+			'class': 'cbi-section-create-name',
+			'disabled': section.map.readonly || null
+		});
+		let el = E('div', { 'class': 'cbi-section-create' }, [
+			E('div', {}, nameEl),
+			E('button', {
+				'class': 'cbi-button cbi-button-add',
+				'title': title,
+				'click': ui.createHandlerFn(section, (ev) => {
+					if (nameEl.classList.contains('cbi-input-invalid'))
+						return;
 
-			if (!v) {
-				button.disabled = true;
-				return true;
-			} else if (!/^[a-zA-Z0-9_-]+$/.test(v)) {
-				button.disabled = true;
-				return _('Expecting: %s').format(_('valid UCI identifier'));
-			} else if (uci.get(uciconfig, v)) {
-				button.disabled = true;
-				return _('Expecting: %s').format(_('unique UCI identifier'));
-			} else {
-				button.disabled = null;
-				return true;
-			}
-		}, 'blur', 'keyup');
+					return section.handleAdd(ev, nameEl.value);
+				}),
+				'disabled': true
+			}, [ title ])
+		]);
+
+		if (extra_class)
+			el.classList.add(extra_class);
+
+		section.handleAdd = function(ev, name) {
+			if (typeof name !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(name))
+				throw new Error(_('Expecting: %s').format(_('valid UCI identifier')));
+
+			let id = sectionIdForName(name);
+			if (uci.get(uciconfig, id))
+				throw new Error(_('Expecting: %s').format(_('unique UCI identifier')));
+
+			let section_id = this.map.data.add(uciconfig, this.sectiontype, id);
+			if (id !== name)
+				this.map.data.set(uciconfig, section_id, 'label', name);
+
+			let mapNode = this.getPreviousModalMap();
+			let prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
+			prevMap.addedSection = section_id;
+			return this.renderMoreOptionsModal(section_id);
+		};
+
+		if (section.map.readonly !== true)
+			ui.addValidator(nameEl, 'string', true, (v) => {
+				let button = el.querySelector('.cbi-section-create > .cbi-button-add');
+
+				if (!v) {
+					button.disabled = true;
+					return true;
+				} else if (!/^[a-zA-Z0-9_-]+$/.test(v)) {
+					button.disabled = true;
+					return _('Expecting: %s').format(_('valid UCI identifier'));
+				} else if (uci.get(uciconfig, sectionIdForName(v))) {
+					button.disabled = true;
+					return _('Expecting: %s').format(_('unique UCI identifier'));
+				} else {
+					button.disabled = null;
+					return true;
+				}
+			}, 'blur', 'keyup');
 
 		return el;
 	},

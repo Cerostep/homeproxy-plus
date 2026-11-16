@@ -1433,27 +1433,7 @@ return view.extend({
 			])
 		}
 		ss.renderSectionAdd = function(/* ... */) {
-			let el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments),
-				nameEl = el.querySelector('.cbi-section-create-name');
-
-			ui.addValidator(nameEl, 'string', true, (v) => {
-				let button = el.querySelector('.cbi-section-create > .cbi-button-add');
-				let uciconfig = this.uciconfig || this.map.config;
-
-				if (!v) {
-					button.disabled = true;
-					return true;
-				} else if (!/^[a-zA-Z0-9_-]+$/.test(v)) {
-					button.disabled = true;
-					return _('Expecting: %s').format(_('valid UCI identifier'));
-				} else if (uci.get(uciconfig, v)) {
-					button.disabled = true;
-					return _('Expecting: %s').format(_('unique UCI identifier'));
-				} else {
-					button.disabled = null;
-					return true;
-				}
-			}, 'blur', 'keyup');
+			let el = hp.renderSectionAdd(this, arguments[0]);
 
 			el.appendChild(E('button', {
 				'class': 'cbi-button cbi-button-add',

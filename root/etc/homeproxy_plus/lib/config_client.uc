@@ -384,10 +384,7 @@ function get_outbound(cfg) {
 			const node = uci.get(uciconfig, cfg, 'node');
 			if (isEmpty(node))
 				die(sprintf("%s's node is missing, please check your configuration.", cfg));
-			else if (node === 'urltest')
-				return 'cfg-' + cfg + '-out';
-			else
-				return 'cfg-' + node + '-out';
+			return 'cfg-' + cfg + '-out';
 		}
 	}
 }
@@ -814,7 +811,7 @@ if (!isEmpty(main_node)) {
 	}
 } else if (!isEmpty(default_outbound)) {
 	let urltest_nodes = [],
-	    routing_nodes = [];
+	    routing_nodes = {};
 
 	uci.foreach(uciconfig, uciroutingnode, (cfg) => {
 		if (cfg.enabled !== '1')
@@ -836,6 +833,7 @@ if (!isEmpty(main_node)) {
 			const outbound = uci.get_all(uciconfig, cfg.node) || {};
 			if (outbound.type === 'wireguard') {
 				push(config.endpoints, generate_endpoint(outbound));
+				config.endpoints[length(config.endpoints)-1].tag = 'cfg-' + cfg['.name'] + '-out';
 				config.endpoints[length(config.endpoints)-1].bind_interface = cfg.bind_interface;
 				config.endpoints[length(config.endpoints)-1].detour = get_outbound(cfg.outbound);
 				if (cfg.domain_resolver)
@@ -843,8 +841,11 @@ if (!isEmpty(main_node)) {
 						server: get_resolver(cfg.domain_resolver),
 						strategy: cfg.domain_strategy
 					};
+				if (!routing_nodes[cfg.node])
+					routing_nodes[cfg.node] = config.endpoints[length(config.endpoints)-1];
 			} else {
 				push(config.outbounds, generate_outbound(outbound));
+				config.outbounds[length(config.outbounds)-1].tag = 'cfg-' + cfg['.name'] + '-out';
 				config.outbounds[length(config.outbounds)-1].bind_interface = cfg.bind_interface;
 				config.outbounds[length(config.outbounds)-1].detour = get_outbound(cfg.outbound);
 				if (cfg.domain_resolver)
@@ -852,17 +853,22 @@ if (!isEmpty(main_node)) {
 						server: get_resolver(cfg.domain_resolver),
 						strategy: cfg.domain_strategy
 					};
+				if (!routing_nodes[cfg.node])
+					routing_nodes[cfg.node] = config.outbounds[length(config.outbounds)-1];
 			}
-			push(routing_nodes, cfg.node);
 		}
 	});
 
-	for (let i in filter(urltest_nodes, (l) => !~index(routing_nodes, l))) {
+	for (let i in urltest_nodes) {
 		const urltest_node = uci.get_all(uciconfig, i) || {};
+		/* Preserve the first matching route's settings for URLTest. */
+		let outbound = routing_nodes[i]
+			? { ...routing_nodes[i], tag: 'cfg-' + i + '-out' }
+			: (urltest_node.type === 'wireguard' ? generate_endpoint(urltest_node) : generate_outbound(urltest_node));
 		if (urltest_node.type === 'wireguard')
-			push(config.endpoints, generate_endpoint(urltest_node));
+			push(config.endpoints, outbound);
 		else
-			push(config.outbounds, generate_outbound(urltest_node));
+			push(config.outbounds, outbound);
 	}
 }
 

@@ -31,7 +31,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
-for command in ucode; do
+for command in ucode jq; do
 	if ! command -v "$command" >/dev/null 2>&1; then
 		echo "Required command not found: $command" >&2
 		exit 1
@@ -336,17 +336,29 @@ write_custom_full_case() {
 	cat >> "$UCI_CONFIG" <<'EOF'
 
 config homeproxy_plus 'routing'
-	option default_outbound 'testnode-route'
+	option default_outbound 'testnode_route_one'
 	option default_outbound_dns 'default-dns'
 	option domain_strategy 'prefer_ipv4'
 	option udp_timeout '300'
 
-config routing_node 'testnode-route'
+config routing_node 'testnode_route_one'
 	option label 'Matrix Test Node Route'
 	option enabled '1'
 	option node 'testnode'
 	option domain_resolver 'default-dns'
 	option domain_strategy 'prefer_ipv4'
+
+config routing_node 'testnode_route_two'
+	option label 'Second Node Route'
+	option enabled '1'
+	option node 'testnode'
+	option outbound 'testnode_route_one'
+
+config dns_server 'route_dns'
+	option enabled '1'
+	option type 'udp'
+	option server '8.8.8.8'
+	option outbound 'testnode_route_two'
 
 config routing_node 'testurltest'
 	option label 'Matrix Test URLTest'
@@ -362,7 +374,7 @@ config routing_rule 'rr-override'
 	option enabled '1'
 	list domain_suffix 'example.com'
 	option action 'route'
-	option outbound 'direct-out'
+	option outbound 'testnode_route_two'
 	option override_address '1.1.1.1'
 	option udp_disable_domain_unmapping '1'
 	option tls_fragment '1'
@@ -531,6 +543,67 @@ write_custom_full_case
 expect_ok "custom-full" \
 	"was converted to a query_type match" \
 	"store_rdrc was migrated to store_dns"
+if ! jq -e '
+	([.outbounds[].tag] | length == (unique | length)) and
+	(.route.final == "cfg-testnode_route_one-out") and
+	(any(.route.rules[]; .override_address == "1.1.1.1" and .outbound == "cfg-testnode_route_two-out")) and
+	(any(.dns.servers[]; .tag == "cfg-route_dns-dns" and .detour == "cfg-testnode_route_two-out")) and
+	(any(.outbounds[]; .tag == "cfg-testnode_route_two-out" and .detour == "cfg-testnode_route_one-out")) and
+	(any(.outbounds[]; .tag == "cfg-testurltest-out" and .outbounds == ["cfg-testnode-out"])) and
+	([.outbounds[] | select(.tag == "cfg-testnode_route_one-out" or .tag == "cfg-testnode-out") |
+		del(.tag)] | length == 2 and .[0] == .[1])
+' "$TEST_DIR/custom-full.json" >/dev/null; then
+	fail "custom-full: shared routing node tags, references or URLTest settings are incorrect"
+fi
+
+sed -i "s/Matrix Test Node Route/Renamed Test Route/" "$UCI_CONFIG"
+expect_ok "custom-renamed" \
+	"was converted to a query_type match" \
+	"store_rdrc was migrated to store_dns"
+if ! jq -e '.route.final == "cfg-testnode_route_one-out" and
+	any(.outbounds[]; .tag == "cfg-testnode_route_one-out")' \
+	"$TEST_DIR/custom-renamed.json" >/dev/null; then
+	fail "custom-renamed: renaming changed the routing node ID"
+fi
+
+write_custom_base
+cat >> "$UCI_CONFIG" <<'EOF'
+
+config homeproxy_plus 'routing'
+	option default_outbound 'wg_one'
+	option default_outbound_dns 'default-dns'
+
+config node 'wg_node'
+	option type 'wireguard'
+	option address '192.0.2.2'
+	option port '51820'
+	list wireguard_local_address '10.0.0.2/32'
+	option wireguard_private_key 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+	option wireguard_peer_public_key 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+
+config routing_node 'wg_one'
+	option enabled '1'
+	option node 'wg_node'
+
+config routing_node 'wg_two'
+	option enabled '1'
+	option node 'wg_node'
+	option outbound 'wg_one'
+
+config routing_node 'wg_test'
+	option enabled '1'
+	option node 'urltest'
+	list urltest_nodes 'wg_node'
+EOF
+expect_ok "custom-shared-wireguard"
+if ! jq -e '
+	(.route.final == "cfg-wg_one-out") and
+	([.endpoints[].tag] | sort == ["cfg-wg_node-out", "cfg-wg_one-out", "cfg-wg_two-out"]) and
+	(any(.endpoints[]; .tag == "cfg-wg_two-out" and .detour == "cfg-wg_one-out")) and
+	(any(.outbounds[]; .tag == "cfg-wg_test-out" and .outbounds == ["cfg-wg_node-out"]))
+' "$TEST_DIR/custom-shared-wireguard.json" >/dev/null; then
+	fail "custom-shared-wireguard: endpoint tags or references are incorrect"
+fi
 
 write_custom_base
 cat >> "$UCI_CONFIG" <<'EOF'

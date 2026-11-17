@@ -1,9 +1,8 @@
 {
 	"luci-app-homeproxy-plus": {
-		"description": "Grant access to homeproxy_plus configuration",
+		"description": "Grant access to homeproxy_plus configuration (Copyright (C) 2026 Cerostep)",
 		"read": {
 			"file": {
-				"/etc/homeproxy_plus/scripts/update_subscriptions.uc": [ "exec" ],
 				"/var/run/homeproxy_plus/homeproxy_plus.log": [ "read" ],
 				"/var/run/homeproxy_plus/sing-box-c.log": [ "read" ],
 				"/var/run/homeproxy_plus/sing-box-s.log": [ "read" ]
@@ -15,7 +14,11 @@
 			"uci": [ "homeproxy_plus" ]
 		},
 		"write": {
+			"cgi-io": {
+				"exec": [ "read" ]
+			},
 			"file": {
+				"/etc/homeproxy_plus/scripts/update_subscriptions.uc": [ "exec" ],
 				"/tmp/homeproxy_plus_certificate.tmp": [ "write" ]
 			},
 			"uci": [ "homeproxy_plus" ]

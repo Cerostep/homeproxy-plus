@@ -79,7 +79,10 @@ export function wGET(url, ua) {
 	if (!ua)
 		ua = 'Wget/1.21 (HomeProxy-Plus, like v2rayN)';
 
-	const output = executeCommand(`/usr/bin/wget -qO- --user-agent ${shellQuote(ua)} --timeout=10 ${shellQuote(url)}`) || {};
+	const output = executeCommand(`/usr/bin/curl --fail --silent --show-error --location --max-time 10 --user-agent ${shellQuote(ua)} ${shellQuote(url)}`);
+	if (output.exitcode !== 0 || output.binary)
+		return null;
+
 	return trim(output.stdout);
 };
 /* Utilities end */

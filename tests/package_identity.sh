@@ -95,6 +95,15 @@ done
 
 jq -e . "$ROOT/root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json" >/dev/null
 jq -e . "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
+jq -e '
+	.["luci-app-homeproxy-plus"] as $acl |
+	$acl.write["cgi-io"].exec == ["read"] and
+	$acl.write.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] == ["exec"] and
+	($acl.read["cgi-io"].exec // [] | index("read") | not) and
+	($acl.read.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] // [] | index("exec") | not)
+' "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
+grep -Fq "fs.exec_direct('/etc/homeproxy_plus/scripts/update_subscriptions.uc')" \
+	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
 grep -q "executeCommand('/usr/bin/sing-box', 'check'" \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_validate.uc"
 grep -q 'PKG_NAME="luci-app-homeproxy-plus"' "$ROOT/.github/build-ipk.sh"

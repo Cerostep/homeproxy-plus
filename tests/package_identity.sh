@@ -97,7 +97,7 @@ jq -e . "$ROOT/root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json" >/dev/nu
 jq -e . "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
 jq -e '
 	.["luci-app-homeproxy-plus"] as $acl |
-	$acl.write["cgi-io"].exec == ["read"] and
+	$acl.write["cgi-io"] == ["exec"] and
 	$acl.write.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] == ["exec"] and
 	($acl.read["cgi-io"].exec // [] | index("read") | not) and
 	($acl.read.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] // [] | index("exec") | not)

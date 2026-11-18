@@ -590,7 +590,7 @@ function main() {
 			return null;
 
 		/* Empty object - failed to fetch nodes */
-		if (length(node_cache[cfg.grouphash]) === 0)
+		if (!node_cache[cfg.grouphash] || length(node_cache[cfg.grouphash]) === 0)
 			return null;
 
 		const parsed_model = node_cache[cfg.grouphash][nodeFingerprint(cfg)];
@@ -711,7 +711,8 @@ if (!isEmpty(subscription_urls))
 		if (call(main) === false)
 			exit(1);
 	} catch(e) {
-		log(sprintf('[FATAL ERROR] Subscription update failed (%s).', e.type));
+		log(sprintf('[FATAL ERROR] Subscription update failed (%s): %s',
+			e.type || 'unknown error', e.message || 'no error message'));
 
 		if (via_proxy !== '1') {
 			log('Starting service with the last committed configuration...');

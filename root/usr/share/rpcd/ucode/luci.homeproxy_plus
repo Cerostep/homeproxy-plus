@@ -270,6 +270,19 @@ const methods = {
 		}
 	},
 
+	subscription_update: {
+		call: function() {
+			const status = system(`${HP_DIR}/scripts/update_subscriptions.uc`);
+			if (status !== 0)
+				return {
+					result: false,
+					error: `Subscription update failed (exit status ${status})`
+				};
+
+			return { result: true };
+		}
+	},
+
 	log_clean: {
 		args: { type: 'type' },
 		call: function(req) {

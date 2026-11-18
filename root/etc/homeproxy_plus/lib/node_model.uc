@@ -62,7 +62,7 @@ export function toNodeModel(config, sourceId) {
 	const fingerprint = nodeFingerprint(config);
 
 	return {
-		id: md5(sourceId + ':' + fingerprint),
+		id: fingerprint,
 		fingerprint,
 		name: config.label,
 		type: config.type,

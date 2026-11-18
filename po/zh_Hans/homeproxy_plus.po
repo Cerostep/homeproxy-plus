@@ -2406,6 +2406,18 @@ msgstr "TCP 快速打开"
 msgid "Latency"
 msgstr "延迟"
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Click to test TCP latency"
+msgstr "点击检测 TCP 延迟"
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Test"
+msgstr "检测"
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Subscription update failed"
+msgstr "订阅更新失败"
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:307
 msgid "TCP/IP stack"
 msgstr "TCP/IP 协议栈"

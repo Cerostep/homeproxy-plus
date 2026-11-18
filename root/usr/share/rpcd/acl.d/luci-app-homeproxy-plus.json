@@ -14,9 +14,7 @@
 			"uci": [ "homeproxy_plus" ]
 		},
 		"write": {
-			"cgi-io": [ "exec" ],
 			"file": {
-				"/etc/homeproxy_plus/scripts/update_subscriptions.uc": [ "exec" ],
 				"/tmp/homeproxy_plus_certificate.tmp": [ "write" ]
 			},
 			"uci": [ "homeproxy_plus" ]

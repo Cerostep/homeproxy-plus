@@ -7,8 +7,6 @@
 
 'use strict';
 'require form';
-'require fs';
-'require poll';
 'require rpc';
 'require uci';
 'require ui';
@@ -24,9 +22,11 @@ const callNodeTcping = rpc.declare({
 	expect: { '': {} }
 });
 
-const nodeLatencyCells = new Map();
-let nodeLatencyPolling = false;
-let nodeLatencyInitialRefreshScheduled = false;
+const callSubscriptionUpdate = rpc.declare({
+	object: 'luci.homeproxy_plus',
+	method: 'subscription_update',
+	expect: { '': {} }
+});
 
 function refreshNodeLatency(id, element) {
 	if (!element.isConnected)
@@ -48,37 +48,6 @@ function refreshNodeLatency(id, element) {
 		element.textContent = _('Failed');
 		element.title = error?.message || String(error);
 	});
-}
-
-function refreshNodeLatencies() {
-	let pending = Array.from(nodeLatencyCells.entries()).filter(([id, element]) => {
-		if (!element.isConnected) {
-			nodeLatencyCells.delete(id);
-			return false;
-		}
-
-		return true;
-	});
-
-	const runWorker = async () => {
-		while (pending.length) {
-			const [id, element] = pending.shift();
-			await refreshNodeLatency(id, element);
-		}
-	};
-
-	return Promise.all(Array.from(
-		{ length: Math.min(5, pending.length) },
-		() => runWorker()
-	));
-}
-
-function registerNodeLatencyPolling() {
-	if (nodeLatencyPolling)
-		return;
-
-	nodeLatencyPolling = true;
-	poll.add(refreshNodeLatencies, 60);
 }
 
 function allowInsecureConfirm(ev, _section_id, value) {
@@ -457,7 +426,6 @@ function parseShareLink(uri, features) {
 
 function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	let s = section, o;
-	registerNodeLatencyPolling();
 	s.rowcolors = true;
 	s.sortable = true;
 	s.nodescriptions = true;
@@ -466,21 +434,27 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 
 	o = s.option(form.DummyValue, '_tcp_latency', _('Latency'));
 	o.textvalue = function(section_id) {
-		let latency = E('span', {}, _('Checking...'));
+		let latency = E('span', {
+			style: 'cursor:pointer',
+			tabindex: '0',
+			role: 'button',
+			title: _('Click to test TCP latency')
+		}, _('Test'));
 		if (!uci.get(data[0], section_id, 'address') ||
 		    !uci.get(data[0], section_id, 'port')) {
 			latency.textContent = 'N/A';
+			latency.removeAttribute('role');
 			return latency;
 		}
 
-		nodeLatencyCells.set(section_id, latency);
-		if (!nodeLatencyInitialRefreshScheduled) {
-			nodeLatencyInitialRefreshScheduled = true;
-			setTimeout(() => {
-				nodeLatencyInitialRefreshScheduled = false;
-				refreshNodeLatencies();
-			}, 0);
-		}
+		const testLatency = (event) => {
+			if (event.type === 'keydown' && !['Enter', ' '].includes(event.key))
+				return;
+			event.preventDefault();
+			refreshNodeLatency(section_id, latency);
+		};
+		latency.addEventListener('click', testLatency);
+		latency.addEventListener('keydown', testLatency);
 
 		return latency;
 	};
@@ -1542,7 +1516,10 @@ return view.extend({
 			}
 		}
 		o.onclick = function() {
-			return fs.exec_direct('/etc/homeproxy_plus/scripts/update_subscriptions.uc').then((res) => {
+			return callSubscriptionUpdate().then((res) => {
+				if (!res.result)
+					throw new Error(res.error || _('Subscription update failed'));
+
 				return location.reload();
 			}).catch((err) => {
 				ui.addNotification(null, E('p', _('An error occurred during updating subscriptions: %s').format(err)));
@@ -1568,24 +1545,39 @@ return view.extend({
 		}
 		o.onclick = function() {
 			let subnodes = [];
+			let stableIds = {};
 			uci.sections(data[0], 'node', (res) => {
-				if (res.grouphash)
+				if (res.grouphash) {
 					subnodes.push(res['.name']);
+					stableIds[res['.name']] = getNodeIdentityHash(res);
+				}
+			});
+
+			uci.sections(data[0], null, (section) => {
+				Object.keys(section).forEach((option) => {
+					if (option.startsWith('.'))
+						return;
+
+					let value = section[option];
+					if (Array.isArray(value)) {
+						let replaced = value.map((item) => stableIds[item] || item);
+						if (replaced.some((item, index) => item !== value[index]))
+							uci.set(data[0], section['.name'], option, replaced);
+					} else if (stableIds[value]) {
+						uci.set(data[0], section['.name'], option, stableIds[value]);
+					}
+				});
 			});
 
 			for (let i in subnodes)
 				uci.remove(data[0], subnodes[i]);
 
-			if (subnodes.includes(uci.get(data[0], 'config', 'main_node')))
-				uci.set(data[0], 'config', 'main_node', 'nil');
-
-			if (subnodes.includes(uci.get(data[0], 'config', 'main_udp_node')))
-				uci.set(data[0], 'config', 'main_udp_node', 'nil');
-
 			this.inputtitle = _('%s nodes removed').format(subnodes.length);
 			this.readonly = true;
 
-			return this.map.save(null, true);
+			return this.map.save(null, true).then(() => {
+				return ui.changes.apply(true);
+			});
 		}
 		/* Subscriptions settings end */
 

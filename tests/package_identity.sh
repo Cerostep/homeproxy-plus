@@ -78,7 +78,9 @@ grep -q "form.DummyValue, '_tcp_latency', _('Latency')" \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
 grep -q 'o.textvalue = function(section_id)' \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
-grep -q 'poll.add(refreshNodeLatencies, 60)' \
+! grep -q 'poll.add(refreshNodeLatencies' \
+	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
+grep -q 'refreshNodeLatency(section_id, latency)' \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
 
 if grep -R -n -E \
@@ -97,13 +99,14 @@ jq -e . "$ROOT/root/usr/share/luci/menu.d/luci-app-homeproxy-plus.json" >/dev/nu
 jq -e . "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
 jq -e '
 	.["luci-app-homeproxy-plus"] as $acl |
-	$acl.write["cgi-io"] == ["exec"] and
-	$acl.write.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] == ["exec"] and
-	($acl.read["cgi-io"].exec // [] | index("read") | not) and
-	($acl.read.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] // [] | index("exec") | not)
+	($acl.read["cgi-io"] == null) and
+	($acl.write["cgi-io"] == null) and
+	($acl.write.file["/etc/homeproxy_plus/scripts/update_subscriptions.uc"] == null)
 ' "$ROOT/root/usr/share/rpcd/acl.d/luci-app-homeproxy-plus.json" >/dev/null
-grep -Fq "fs.exec_direct('/etc/homeproxy_plus/scripts/update_subscriptions.uc')" \
+grep -q 'method: .subscription_update.' \
 	"$ROOT/htdocs/luci-static/resources/view/homeproxy_plus/node.js"
+grep -q '^	subscription_update: {' \
+	"$ROOT/root/usr/share/rpcd/ucode/luci.homeproxy_plus"
 grep -q "executeCommand('/usr/bin/sing-box', 'check'" \
 	"$ROOT/root/etc/homeproxy_plus/lib/config_validate.uc"
 grep -q 'PKG_NAME="luci-app-homeproxy-plus"' "$ROOT/.github/build-ipk.sh"
@@ -135,7 +138,7 @@ grep -q 'export function toNodeModel' \
 	"$ROOT/root/etc/homeproxy_plus/lib/node_model.uc"
 grep -q 'export function fromNodeModel' \
 	"$ROOT/root/etc/homeproxy_plus/lib/node_model.uc"
-grep -q "id: md5(sourceId + ':' + fingerprint)" \
+grep -q "id: fingerprint" \
 	"$ROOT/root/etc/homeproxy_plus/lib/node_model.uc"
 grep -q "key in \\['label', 'grouphash', 'enabled'\\]" \
 	"$ROOT/root/etc/homeproxy_plus/lib/node_model.uc"

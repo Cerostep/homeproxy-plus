@@ -2358,6 +2358,18 @@ msgstr ""
 msgid "Latency"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Click to test TCP latency"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Test"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/homeproxy_plus/node.js
+msgid "Subscription update failed"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/client.js:307
 msgid "TCP/IP stack"
 msgstr ""

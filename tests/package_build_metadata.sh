@@ -11,7 +11,8 @@ trap 'rm -rf "$TEST_DIR"' EXIT
 mkdir -p "$TEST_DIR/.github" "$TEST_DIR/htdocs" "$TEST_DIR/root" \
 	"$TEST_DIR/po/zh_Hans" "$TEST_DIR/bin"
 cp "$ROOT/.github/build-ipk.sh" "$ROOT/.github/package-version.sh" "$TEST_DIR/.github/"
-base_version="$(sed -n 's/^PKG_BASE_VERSION="\([^"]*\)"$/\1/p' "$TEST_DIR/.github/build-ipk.sh")"
+cp "$ROOT/version" "$TEST_DIR/version"
+base_version="$(cat "$TEST_DIR/version")"
 [[ "$base_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 touch "$TEST_DIR/htdocs/fixture" "$TEST_DIR/root/fixture" \
 	"$TEST_DIR/po/zh_Hans/homeproxy_plus.po"

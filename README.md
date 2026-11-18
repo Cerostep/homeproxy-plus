@@ -165,7 +165,7 @@ For an Alpha pre-release, create and publish a tag matching
 `v<PKG_VERSION>-alpha.<N>` (for example, `v0.1.0-alpha.1`) as a GitHub
 pre-release. The release workflow uses the tag to version both package
 formats, with package-manager-specific pre-release ordering. The tag's base
-version must match `PKG_BASE_VERSION` in `.github/build-ipk.sh`.
+version must match the value in the repository root [`version`](./version) file.
 
 See [arch.md](./arch.md) for the binding implementation constraints, AI coding
 tool instructions, and validation requirements.

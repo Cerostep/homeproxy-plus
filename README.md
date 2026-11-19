@@ -31,16 +31,45 @@ package feeds.
 
 1. Open the [HomeProxy-Plus Releases](https://github.com/Cerostep/homeproxy-plus/releases)
    page and download the latest release asset that matches both your device's
-   package architecture and package manager. Use the `.ipk` asset on
-   `opkg`-based systems or the `.apk` asset on `apk`-based systems.
+   package architecture and package manager. OpenWrt 25.12 and newer use APK
+   packages (`.apk`); older `opkg`-based OpenWrt/ImmortalWrt releases use IPK
+   packages (`.ipk`).
 2. In LuCI, open **System > Software** and use its local package upload/install
-   function to install the downloaded package. If installing over SSH, use
-   your system's package manager and its local-file install command.
+   function to install the downloaded package.
 3. If installation reports missing dependencies, update the device's package
    lists and install from the configured OpenWrt/ImmortalWrt feeds. Do not
    replace the bundled sing-box binary.
 4. Open **Services > HomeProxy-Plus**. The package can coexist with the
    original HomeProxy; keep the two applications' settings separate.
+
+#### Install a signed APK on OpenWrt 25.12+
+
+OpenWrt 25.12 and newer reject APK packages that are not signed by a trusted
+key. Download both the architecture-specific APK and the release's
+`homeproxy-plus-apk.pem` public key, then install the key:
+
+```sh
+APK_ARCH="$(apk --print-arch)"
+APK_URL='https://github.com/Cerostep/homeproxy-plus/releases/latest/download'
+APK_FILE="luci-app-homeproxy-plus_<version>_${APK_ARCH}.apk"
+
+curl -fsSLo /etc/apk/keys/homeproxy-plus-apk.pem \
+  "$APK_URL/homeproxy-plus-apk.pem"
+curl -fsSLo "/tmp/$APK_FILE" "$APK_URL/$APK_FILE"
+apk --no-network add "/tmp/$APK_FILE"
+```
+
+Replace `<version>` in `APK_FILE` with the version from the release asset
+filename. Verify the package explicitly before installation if desired:
+
+```sh
+apk --repositories-file /dev/null --no-network verify \
+  "/tmp/$APK_FILE"
+```
+
+Do not use `--allow-untrusted` for release packages. The matching public key
+is published separately so users can verify each signed APK without embedding
+the private key in packages or on GitHub Actions.
 
 #### Install from the signed opkg feed
 

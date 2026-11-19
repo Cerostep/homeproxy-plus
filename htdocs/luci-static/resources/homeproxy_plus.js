@@ -91,6 +91,15 @@ return baseclass.extend({
 		renderWidget: function(/* ... */) {
 			let dl = form.DynamicList.prototype.renderWidget.apply(this, arguments);
 			dl.querySelector('.add-item ul > li[data-value="-"]')?.remove();
+			(this.missingValues || []).forEach((value) => {
+				dl.querySelectorAll('.item').forEach((item) => {
+					let stored = item.querySelector('input[type="hidden"]');
+					if (stored?.value === value) {
+						item.style.opacity = '0.55';
+						item.title = _('Node is unavailable');
+					}
+				});
+			});
 			return dl;
 		}
 	}),

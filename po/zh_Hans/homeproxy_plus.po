@@ -2196,6 +2196,14 @@ msgstr "状态"
 msgid "Probe unavailable"
 msgstr "无法探测"
 
+#: htdocs/luci-static/resources/view/homeproxy_plus/client.js
+msgid "Unavailable"
+msgstr "不可用"
+
+#: htdocs/luci-static/resources/homeproxy_plus.js
+msgid "Node is unavailable"
+msgstr "节点不可用"
+
 #: htdocs/luci-static/resources/view/homeproxy_plus/server.js
 msgid "No status returned for this server."
 msgstr "未能获取此服务的状态。"

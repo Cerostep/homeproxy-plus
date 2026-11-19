@@ -428,6 +428,22 @@ function renderNodeSettings(section, data, features, main_node, routing_mode) {
 	let s = section, o;
 	s.rowcolors = true;
 	s.sortable = true;
+	let handleRemove = s.handleRemove;
+	s.handleRemove = function(section_id, ev) {
+		let label = uci.get(data[0], section_id, 'label') || section_id;
+		uci.sections(data[0], null, (entry) => {
+			let changed = false;
+			for (let option of ['main_urltest_nodes', 'main_udp_urltest_nodes', 'urltest_nodes']) {
+				let values = uci.get(data[0], entry['.name'], option) || [];
+				values = Array.isArray(values) ? values : [values];
+				changed ||= values.includes(section_id);
+			}
+
+			if (changed)
+				rememberMissingNodeLabel(data[0], entry['.name'], section_id, label);
+		});
+		return handleRemove.call(this, section_id, ev);
+	};
 	s.nodescriptions = true;
 	s.modaltitle = L.bind(hp.loadModalTitle, this, _('Node'), _('Add a node'), data[0]);
 	s.sectiontitle = L.bind(hp.loadDefaultLabel, this, data[0]);
@@ -1266,6 +1282,14 @@ function getNodeIdentityHash(node) {
 	return hp.calcStringMD5(JSON.stringify(identity));
 }
 
+function rememberMissingNodeLabel(config, section_id, node_id, label) {
+	let entries = uci.get(config, section_id, 'urltest_node_labels') || [];
+	entries = Array.isArray(entries) ? [...entries] : [entries];
+	entries = entries.filter((entry) => entry.indexOf(node_id + ':') !== 0);
+	entries.push(node_id + ':' + label);
+	uci.set(config, section_id, 'urltest_node_labels', entries);
+}
+
 return view.extend({
 	load() {
 		return Promise.all([
@@ -1546,14 +1570,33 @@ return view.extend({
 		o.onclick = function() {
 			let subnodes = [];
 			let stableIds = {};
+			let stableLabels = {};
 			uci.sections(data[0], 'node', (res) => {
 				if (res.grouphash) {
 					subnodes.push(res['.name']);
 					stableIds[res['.name']] = getNodeIdentityHash(res);
+					stableLabels[res['.name']] = res.label || res['.name'];
 				}
 			});
 
 			uci.sections(data[0], null, (section) => {
+				if (['main_urltest_nodes', 'main_udp_urltest_nodes', 'urltest_nodes'].some((option) => {
+					let values = section[option] || [];
+					values = Array.isArray(values) ? values : [values];
+					return values.some((value) => stableIds[value]);
+				})) {
+					let entries = [];
+					for (let option of ['main_urltest_nodes', 'main_udp_urltest_nodes', 'urltest_nodes']) {
+						let values = section[option] || [];
+						values = Array.isArray(values) ? values : [values];
+						for (let value of values)
+							if (stableIds[value])
+								entries.push([stableIds[value], stableLabels[value]]);
+					}
+					for (let entry of entries)
+						rememberMissingNodeLabel(data[0], section['.name'], entry[0], entry[1]);
+				}
+
 				Object.keys(section).forEach((option) => {
 					if (option.startsWith('.'))
 						return;

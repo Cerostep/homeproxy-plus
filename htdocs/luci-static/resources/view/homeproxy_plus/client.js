@@ -92,11 +92,12 @@ let stubValidator = {
 
 return view.extend({
 	load() {
-		return Promise.all([
-			uci.load('homeproxy_plus'),
-			hp.getBuiltinFeatures(),
-			network.getHostHints()
-		]);
+		return L.probeSystemFeatures().then(() =>
+			Promise.all([
+				uci.load('homeproxy_plus'),
+				hp.getBuiltinFeatures(),
+				network.getHostHints()
+			]));
 	},
 
 	render(data) {
@@ -120,7 +121,7 @@ return view.extend({
 		    hosts = data[2]?.hosts || {};
 
 		/* Cache all configured proxy nodes, they will be called multiple times */
-		let proxy_nodes = {};
+		let proxy_nodes = {}, missing_nodes = {};
 		uci.sections(data[0], 'node', (res) => {
 			let nodeaddr = ((res.type === 'direct') ? res.override_address : res.address) || '',
 			    nodeport = ((res.type === 'direct') ? res.override_port : res.port) || '';
@@ -128,6 +129,22 @@ return view.extend({
 			proxy_nodes[res['.name']] =
 				String.format('[%s] %s', res.type, res.label || ((stubValidator.apply('ip6addr', nodeaddr) ?
 					String.format('[%s]', nodeaddr) : nodeaddr) + ':' + nodeport));
+		});
+		uci.sections(data[0], null, (section) => {
+			let entries = section.urltest_node_labels || [];
+			entries = Array.isArray(entries) ? entries : [entries];
+			entries.forEach((entry) => {
+				let separator = entry.indexOf(':');
+				if (separator <= 0)
+					return;
+
+				let id = entry.substring(0, separator);
+				let label = entry.substring(separator + 1);
+				if (!uci.get(data[0], id) && label) {
+					missing_nodes[id] = label;
+					proxy_nodes[id] = String.format('%s (%s)', label, _('Unavailable'));
+				}
+			});
 		});
 
 		m = new form.Map('homeproxy_plus');
@@ -149,6 +166,7 @@ return view.extend({
 			_('List of nodes to test.'));
 		for (let i in proxy_nodes)
 			o.value(i, proxy_nodes[i]);
+		o.missingValues = Object.keys(missing_nodes);
 		o.depends('main_node', 'urltest');
 		o.rmempty = false;
 
@@ -178,6 +196,7 @@ return view.extend({
 			_('List of nodes to test.'));
 		for (let i in proxy_nodes)
 			o.value(i, proxy_nodes[i]);
+		o.missingValues = Object.keys(missing_nodes);
 		o.depends('main_udp_node', 'urltest');
 		o.rmempty = false;
 
@@ -532,6 +551,7 @@ return view.extend({
 			_('List of nodes to test.'));
 		for (let i in proxy_nodes)
 			so.value(i, proxy_nodes[i]);
+		so.missingValues = Object.keys(missing_nodes);
 		so.depends('node', 'urltest');
 		so.validate = function(section_id) {
 			let value = this.section.formvalue(section_id, 'urltest_nodes');

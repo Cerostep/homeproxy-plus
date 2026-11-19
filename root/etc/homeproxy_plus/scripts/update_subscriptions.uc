@@ -69,6 +69,7 @@ function filter_check(name) {
 
 /* Common var start */
 const node_cache = {},
+      node_label_cache = {},
       incomplete_subscriptions = {},
       node_result = [];
 
@@ -89,6 +90,93 @@ function service_action(action) {
 		log(sprintf('Failed to %s HomeProxy-Plus service (exit status %d).', action, status));
 
 	return status;
+}
+
+function preserveMissingNodeLabels(nodes) {
+	if (isEmpty(nodes))
+		return;
+
+	uci.foreach(uciconfig, null, (section) => {
+		let labels = type(section.urltest_node_labels) === 'array'
+			? [...section.urltest_node_labels]
+			: (section.urltest_node_labels ? [section.urltest_node_labels] : []);
+		let changed = false;
+
+		for (let option in ['main_urltest_nodes', 'main_udp_urltest_nodes', 'urltest_nodes']) {
+			const refs = type(section[option]) === 'array'
+				? section[option]
+				: (section[option] ? [section[option]] : []);
+
+			for (let id in refs) {
+				if (!(id in nodes))
+					continue;
+
+				labels = filter(labels, (entry) => split(entry, ':')[0] !== id);
+				push(labels, `${id}:${nodes[id]}`);
+				changed = true;
+			}
+		}
+
+		if (changed)
+			uci.set(uciconfig, section['.name'], 'urltest_node_labels', labels);
+	});
+}
+
+function resolveAvailableNodeReferences() {
+	uci.foreach(uciconfig, null, (section) => {
+		let labels = type(section.urltest_node_labels) === 'array'
+			? [...section.urltest_node_labels]
+			: (section.urltest_node_labels ? [section.urltest_node_labels] : []);
+		const label_by_id = {};
+		for (let entry in labels) {
+			const separator = index(entry, ':');
+			if (separator > 0)
+				label_by_id[substr(entry, 0, separator)] = substr(entry, separator + 1);
+		}
+
+		let changed = false;
+		const replacements = {};
+		for (let option in ['main_urltest_nodes', 'main_udp_urltest_nodes', 'urltest_nodes']) {
+			const refs = type(section[option]) === 'array'
+				? section[option]
+				: (section[option] ? [section[option]] : []);
+			const resolved = [];
+			let option_changed = false;
+
+			for (let id in refs) {
+				let replacement = id;
+				if (!uci.get(uciconfig, id) && label_by_id[id]) {
+					const candidates = [];
+					uci.foreach(uciconfig, ucinode, (node) => {
+						if (node.label === label_by_id[id])
+							push(candidates, node['.name']);
+					});
+					if (length(candidates) === 1)
+						replacement = candidates[0];
+				}
+				if (replacement !== id) {
+					replacements[id] = replacement;
+					changed = true;
+					option_changed = true;
+				}
+				push(resolved, replacement);
+			}
+
+			if (option_changed)
+				uci.set(uciconfig, section['.name'], option, resolved);
+		}
+
+		if (changed) {
+			labels = filter(labels, (entry) => {
+				const id = substr(entry, 0, index(entry, ':'));
+				return !(id in replacements);
+			});
+			if (length(labels))
+				uci.set(uciconfig, section['.name'], 'urltest_node_labels', labels);
+			else
+				uci.delete(uciconfig, section['.name'], 'urltest_node_labels');
+		}
+	});
 }
 
 function parse_uri(uri) {
@@ -504,6 +592,7 @@ function main() {
 		url = replace(url, /#.*$/, '');
 		const groupHash = md5(url);
 		node_cache[groupHash] = {};
+		node_label_cache[groupHash] = {};
 		incomplete_subscriptions[groupHash] = false;
 
 		const res = wGET(url, user_agent);
@@ -559,6 +648,9 @@ function main() {
 				push(node_result, []);
 				push(node_result[length(node_result)-1], model);
 				node_cache[groupHash][confHash] = model;
+				if (!node_label_cache[groupHash][model.name])
+					node_label_cache[groupHash][model.name] = [];
+				push(node_label_cache[groupHash][model.name], model);
 
 				count++;
 			}
@@ -584,6 +676,7 @@ function main() {
 	}
 
 	let added = 0, removed = 0;
+	const missing_nodes = {};
 	uci.foreach(uciconfig, ucinode, (cfg) => {
 		/* Nodes created by the user */
 		if (!cfg.grouphash)
@@ -593,11 +686,17 @@ function main() {
 		if (!node_cache[cfg.grouphash] || length(node_cache[cfg.grouphash]) === 0)
 			return null;
 
-		const parsed_model = node_cache[cfg.grouphash][nodeFingerprint(cfg)];
+		let parsed_model = node_cache[cfg.grouphash][nodeFingerprint(cfg)];
+		if (!parsed_model && !incomplete_subscriptions[cfg.grouphash]) {
+			const candidates = node_label_cache[cfg.grouphash][cfg.label] || [];
+			if (length(candidates) === 1 && !candidates[0].isExisting)
+				parsed_model = candidates[0];
+		}
 		if (!parsed_model && incomplete_subscriptions[cfg.grouphash])
 			return null;
 
 		if (!parsed_model) {
+			missing_nodes[cfg['.name']] = cfg.label || cfg['name'] || cfg['.name'];
 			uci.delete(uciconfig, cfg['.name']);
 			removed++;
 
@@ -638,6 +737,8 @@ function main() {
 			added++;
 			log(sprintf('Adding node: %s.', model.name));
 		});
+	resolveAvailableNodeReferences();
+	preserveMissingNodeLabels(missing_nodes);
 	let need_restart = (via_proxy !== '1');
 	if (!isEmpty(main_node)) {
 		const first_server = uci.get_first(uciconfig, ucinode);

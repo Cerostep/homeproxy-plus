@@ -52,6 +52,7 @@ set -eu
 test "$1" = mkpkg
 shift
 name= version= arch= output= files=
+sign_key=
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--info)
@@ -62,6 +63,7 @@ while [ "$#" -gt 0 ]; do
 			esac
 			shift 2 ;;
 		--files) files="$2"; shift 2 ;;
+		--sign-key) sign_key="$2"; shift 2 ;;
 		--output) output="$2"; shift 2 ;;
 		--script)
 			case "$2" in
@@ -76,6 +78,9 @@ test "$name" = 'luci-app-homeproxy-plus'
 test "$arch" = 'x86_64'
 test -n "$version"
 test -s "$files/usr/bin/sing-box"
+if [ -n "${EXPECT_APK_SIGN_KEY:-}" ]; then
+	test "$sign_key" = "$EXPECT_APK_SIGN_KEY"
+fi
 touch "$output"
 EOF
 chmod +x "$TEST_DIR/bin/"*
@@ -93,6 +98,10 @@ test -f "$ipk_file"
 assert_ipk_metadata
 bash "$TEST_DIR/.github/build-ipk.sh" apk release x86_64 "v${base_version}-alpha.1"
 test -f "$TEST_DIR/.github/luci-app-homeproxy-plus_${base_version}_alpha1_x86_64.apk"
+printf '%s\n' 'test-signing-key' > "$TEST_DIR/apk-signing-key.pem"
+APK_SIGN_KEY="$TEST_DIR/apk-signing-key.pem" \
+EXPECT_APK_SIGN_KEY="$TEST_DIR/apk-signing-key.pem" \
+	bash "$TEST_DIR/.github/build-ipk.sh" apk release x86_64 "v${base_version}-alpha.1"
 bash "$TEST_DIR/.github/build-ipk.sh" ipk snapshot x86_64
 ipk_file="$(compgen -G "$TEST_DIR/.github/luci-app-homeproxy-plus_*~abc1234_x86_64.ipk")"
 test -n "$ipk_file"

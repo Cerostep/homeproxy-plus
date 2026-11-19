@@ -111,7 +111,17 @@ export root="${IPKG_INSTROOT}"
 export pkgname="'"$PKG_NAME"'"
 default_prerm' > "$TEMP_DIR/pre-deinstall"
 
+	APK_SIGN_ARGS=()
+	if [ -n "${APK_SIGN_KEY:-}" ]; then
+		[ -s "$APK_SIGN_KEY" ] || {
+			echo "APK signing key is missing or empty: $APK_SIGN_KEY" >&2
+			exit 1
+		}
+		APK_SIGN_ARGS+=(--sign-key "$APK_SIGN_KEY")
+	fi
+
 	apk mkpkg \
+		"${APK_SIGN_ARGS[@]}" \
 		--info "name:$PKG_NAME" \
 		--info "version:$PKG_VERSION" \
 		--info "description:HomeProxy-Plus proxy platform for OpenWrt" \

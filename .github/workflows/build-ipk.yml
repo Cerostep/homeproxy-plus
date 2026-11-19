@@ -100,6 +100,7 @@ jobs:
           sudo install -m0755 ipkg-build /usr/local/bin/ipkg-build
 
       - name: Build ipk file
+        if: github.event_name != 'release'
         env:
           TARGET_ARCH: ${{ matrix.target_arch }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -110,6 +111,53 @@ jobs:
           echo "APK_ASSET_NAME=$(find . -maxdepth 1 -name '*.apk' -printf '%f')" >> $GITHUB_ENV
           echo "IPK_ASSET_NAME=$(find . -maxdepth 1 -name '*.ipk' -printf '%f')" >> $GITHUB_ENV
           popd
+
+      - name: Prepare APK signing key
+        if: github.event_name == 'release'
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APK_SIGNING_KEY" ]; then
+            echo "GitHub Actions secret APK_SIGNING_KEY is required for release APK signing." >&2
+            exit 1
+          fi
+          signing_key="$RUNNER_TEMP/homeproxy-plus-apk.pem"
+          umask 077
+          printf '%s\n' "$APK_SIGNING_KEY" > "$signing_key"
+          unset APK_SIGNING_KEY
+          openssl pkey -in "$signing_key" -check -noout
+          echo "APK_SIGN_KEY=$signing_key" >> "$GITHUB_ENV"
+
+      - name: Build signed release packages
+        if: github.event_name == 'release'
+        env:
+          TARGET_ARCH: ${{ matrix.target_arch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          pushd .github
+          fakeroot bash build-ipk.sh apk "${{ github.event_name }}" "$TARGET_ARCH" "$RELEASE_TAG"
+          fakeroot bash build-ipk.sh ipk "${{ github.event_name }}" "$TARGET_ARCH" "$RELEASE_TAG"
+          echo "APK_ASSET_NAME=$(find . -maxdepth 1 -name '*.apk' -printf '%f')" >> $GITHUB_ENV
+          echo "IPK_ASSET_NAME=$(find . -maxdepth 1 -name '*.ipk' -printf '%f')" >> $GITHUB_ENV
+          popd
+
+      - name: Verify signed APK package
+        if: github.event_name == 'release'
+        run: |
+          set -euo pipefail
+          verify_keys="$RUNNER_TEMP/homeproxy-plus-apk-keys"
+          mkdir -m 700 "$verify_keys"
+          openssl pkey -in "$APK_SIGN_KEY" -pubout -out "$verify_keys/homeproxy-plus-apk.pem"
+          verification="$(
+            apk --keys-dir "$verify_keys" --repositories-file /dev/null --no-network \
+              verify ".github/$APK_ASSET_NAME" 2>&1
+          )"
+          printf '%s\n' "$verification"
+          if ! grep -q ': OK' <<<"$verification" || grep -qi 'UNTRUSTED' <<<"$verification"; then
+            echo "Signed APK verification did not produce a trusted result." >&2
+            exit 1
+          fi
 
       - name: Publishing APK files to GitHub Artifacts
         uses: actions/upload-artifact@v7
@@ -160,6 +208,23 @@ jobs:
       - name: Generate opkg feed index
         run: bash .github/create-ipk-feed-index.sh .
 
+      - name: Generate APK public key
+        env:
+          APK_SIGNING_KEY: ${{ secrets.APK_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APK_SIGNING_KEY" ]; then
+            echo "GitHub Actions secret APK_SIGNING_KEY is required to publish the APK public key." >&2
+            exit 1
+          fi
+          signing_key="$RUNNER_TEMP/homeproxy-plus-apk.pem"
+          umask 077
+          trap 'rm -f "$signing_key"' EXIT
+          printf '%s\n' "$APK_SIGNING_KEY" > "$signing_key"
+          unset APK_SIGNING_KEY
+          openssl pkey -in "$signing_key" -check -noout
+          openssl pkey -in "$signing_key" -pubout -out homeproxy-plus-apk.pem
+
       - name: Sign opkg feed index
         env:
           USIGN_SECRET_KEY: ${{ secrets.USIGN_SECRET_KEY }}
@@ -199,4 +264,12 @@ jobs:
           repo_token: ${{ github.token }}
           file: .github/homeproxy-plus-feed.pub
           asset_name: homeproxy-plus-feed.pub
+          tag: ${{ github.ref }}
+
+      - name: Publishing APK public key
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ github.token }}
+          file: homeproxy-plus-apk.pem
+          asset_name: homeproxy-plus-apk.pem
           tag: ${{ github.ref }}

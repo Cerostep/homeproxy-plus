@@ -51,6 +51,9 @@ grep -q 'Depends: libc, ca-bundle, curl,' "$ROOT/.github/build-ipk.sh"
 grep -q 'package_version_for_release_tag' "$ROOT/.github/build-ipk.sh"
 grep -q 'RELEASE_TAG=.*GITHUB_REF_NAME' "$ROOT/.github/build-ipk.sh"
 grep -q 'github.event.release.tag_name' "$ROOT/.github/workflows/build-ipk.yml"
+grep -q 'APK_SIGNING_KEY' "$ROOT/.github/workflows/build-ipk.yml"
+grep -q 'homeproxy-plus-apk.pem' "$ROOT/.github/workflows/build-ipk.yml"
+grep -q -- '--sign-key' "$ROOT/.github/build-ipk.sh"
 grep -A6 'name: Publishing APK files to GitHub Artifacts' "$ROOT/.github/workflows/build-ipk.yml" |
 	grep -q 'archive: true'
 grep -A6 'name: Publishing IPK files to GitHub Artifacts' "$ROOT/.github/workflows/build-ipk.yml" |

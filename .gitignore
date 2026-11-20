@@ -2,3 +2,4 @@
 /.github/*.apk
 /.github/*.ipk
 uc.out
+tmp/

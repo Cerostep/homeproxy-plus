@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Copyright (C) 2026 Cerostep
+# This script updates the ruleset files for homeproxy_plus and restarts the service.
+
 # 1. Define paths and environment
 # Get the directory where the script is located to ensure absolute paths in crontab
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

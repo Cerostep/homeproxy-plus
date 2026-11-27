@@ -36,7 +36,7 @@ export function executeCommand(...args) {
 	let outfd = mkstemp();
 	let errfd = mkstemp();
 
-	const exitcode = system(`${join(' ', args)} >&${outfd.fileno()} 2>&${errfd.fileno()}`);
+	const exitcode = system(`${join(' ', args)} > /proc/self/fd/${outfd.fileno()} 2> /proc/self/fd/${errfd.fileno()}`);
 
 	outfd.seek(0);
 	errfd.seek(0);

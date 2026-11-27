@@ -25,9 +25,25 @@ jobs:
         version:
           - v1.14.0
           - v1.14.4
-          - latest
     steps:
       - uses: actions/checkout@v6
+      - name: Checkout ucode
+        uses: actions/checkout@v6
+        with:
+          repository: ucode-lang/ucode
+          ref: master
+          path: ucode
+      - name: Build ucode
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y cmake pkg-config libjson-c-dev
+          cmake -S ucode -B "$RUNNER_TEMP/ucode-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/ucode-install"
+          cmake --build "$RUNNER_TEMP/ucode-build" --parallel
+          cmake --install "$RUNNER_TEMP/ucode-build"
+          echo "$RUNNER_TEMP/ucode-install/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/ucode-install/lib" >> "$GITHUB_ENV"
       - name: Resolve release version
         id: release
         env:
@@ -69,8 +85,6 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Run generated configuration matrix
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y ucode
           sudo install -m 0755 "$RUNNER_TEMP/sing-box-bin" /usr/bin/sing-box
           /usr/bin/sing-box version
           sh tests/generate_client_config_matrix.sh

@@ -230,6 +230,18 @@ EOF
 
 setup_dev_environment
 
+echo "== Case: command output with high file descriptors =="
+ucode -L "$HP_DIR/scripts" $MODULE_ARGS -e '
+	import { open } from "fs";
+	import { executeCommand, shellQuote } from "homeproxy_plus";
+	let files = [];
+	for (let i = 0; i < 16; i++)
+		push(files, open("/dev/null", "r"));
+	let result = executeCommand("sh", "-c", shellQuote("printf out; printf err >&2; exit 7"));
+	if (result.stdout !== "out" || result.stderr !== "err" || result.exitcode !== 7 || result.binary)
+		die("Command output or exit status was not captured correctly\n");
+'
+
 write_common_sections() {
 	cat > "$UCI_CONFIG" <<'EOF'
 config homeproxy_plus 'infra'

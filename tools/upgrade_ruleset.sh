@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-
 # Copyright (C) 2026 Cerostep
-# This script updates the ruleset files for homeproxy_plus and restarts the service.
+# Upgrade ruleset for homeproxy_plus
+# It is in order to update the ruleset files for homeproxy_plus
+# Avoid blocking startup due to massive ruleset fetching.
 
 # 1. Define paths and environment
 # Get the directory where the script is located to ensure absolute paths in crontab
@@ -24,6 +25,7 @@ files=(
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/gfw.srs gfw.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/google-cn.srs google-cn.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/google.srs google.srs"
+    "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/bing.srs bing.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geoip/google.srs google-ip.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/google-gemini.srs google-gemini.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geoip/cn.srs cn-ip.srs"
@@ -31,7 +33,7 @@ files=(
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/geolocation-!cn.srs geolocation-!cn.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/apple.srs apple.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/microsoft.srs microsoft.srs"
-    "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/category-games.json category-games.json"
+    "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/category-games.srs category-games.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/category-games-cn.srs category-games-cn.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/steam.srs steam.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geoip/netflix.srs netflix-ip.srs"
@@ -49,6 +51,8 @@ files=(
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/adobe.srs adobe.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/spotify.srs spotify.srs"
     "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/category-ai-!cn.srs category-ai-!cn.srs"
+    "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/sing/geo/geosite/category-communication.srs category-communication.srs"
+    "https://raw.githubusercontent.com/privacy-protection-tools/anti-ad.github.io/master/docs/anti-ad-sing-box.srs anti-ad-sing-box.srs"
     
 )
 

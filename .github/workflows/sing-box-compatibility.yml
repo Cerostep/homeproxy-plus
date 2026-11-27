@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ucode-lang/ucode
-          ref: be92ebd706339fd4a848b88ee516b1ac4eb62ef8
+          ref: master
           path: ucode
       - name: Build ucode
         run: |
